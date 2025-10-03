@@ -210,10 +210,18 @@
         let tempMarker = null;
         let gristAPI = null;
         let isInGrist = false;
+        let existingMarkers = [];
         
         const GRIST_CONFIG = {
             apiUrl: 'https://grist.numerique.gouv.fr/api/docs/g2HLa3eYrAStdHNxgpmBPr/tables/Signalements/records',
             apiKey: 'c6ba01a7d00347cd2ab2f051df5d6acab380afbf'
+        };
+        
+        const PRIORITY_COLORS = {
+            'Critique': '#dc3545',
+            'Haute': '#fd7e14',
+            'Moyenne': '#ffc107',
+            'Basse': '#28a745'
         };
         
         // Détecter si on est dans Grist
@@ -251,6 +259,125 @@
             map.on('click', onMapClick);
             
             console.log('Carte prête !');
+            
+            // Charger les signalements existants
+            loadExistingSignalements();
+            
+            // Auto-refresh toutes les 30 secondes
+            setInterval(loadExistingSignalements, 30000);
+        }
+        
+        async function loadExistingSignalements() {
+            try {
+                console.log('Chargement des signalements existants...');
+                
+                let records = [];
+                
+                if (isInGrist && gristAPI) {
+                    // Récupérer via API Grist Widget
+                    const tableData = await gristAPI.docApi.fetchTable('Signalements');
+                    records = tableData.id.map((id, index) => ({
+                        id: id,
+                        fields: {
+                            Agent: tableData.Agent[index],
+                            Latitude: tableData.Latitude[index],
+                            Longitude: tableData.Longitude[index],
+                            Route: tableData.Route[index],
+                            Commune: tableData.Commune[index],
+                            Type_coupure: tableData.Type_coupure[index],
+                            Cause: tableData.Cause[index],
+                            Priorite: tableData.Priorite[index],
+                            Statut: tableData.Statut[index],
+                            Description: tableData.Description[index],
+                            Date_heure: tableData.Date_heure[index]
+                        }
+                    }));
+                } else {
+                    // Récupérer via API REST
+                    const response = await fetch(GRIST_CONFIG.apiUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${GRIST_CONFIG.apiKey}`
+                        }
+                    });
+                    const data = await response.json();
+                    records = data.records;
+                }
+                
+                console.log(`${records.length} signalement(s) trouvé(s)`);
+                
+                displayExistingMarkers(records);
+                
+            } catch (error) {
+                console.error('Erreur chargement signalements:', error);
+            }
+        }
+        
+        function displayExistingMarkers(records) {
+            // Supprimer les anciens marqueurs
+            existingMarkers.forEach(marker => map.removeLayer(marker));
+            existingMarkers = [];
+            
+            // Ajouter les nouveaux
+            records.forEach(record => {
+                const fields = record.fields;
+                
+                // Vérifier que les coordonnées existent
+                if (!fields.Latitude || !fields.Longitude) return;
+                
+                const color = PRIORITY_COLORS[fields.Priorite] || '#6c757d';
+                
+                // Créer l'icône colorée
+                const icon = L.divIcon({
+                    className: 'existing-marker',
+                    html: `<div style="
+                        background: ${color};
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 50%;
+                        border: 3px solid white;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                        ${fields.Statut === 'Resolu' ? 'opacity: 0.5;' : ''}
+                    "></div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+                
+                // Créer le popup
+                const causes = Array.isArray(fields.Cause) ? fields.Cause.join(', ') : fields.Cause;
+                const popupContent = `
+                    <div style="min-width: 200px;">
+                        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 15px;">
+                            ${fields.Route} - ${fields.Commune}
+                        </h3>
+                        <div style="font-size: 13px;">
+                            <p style="margin: 5px 0;"><strong>Type:</strong> ${fields.Type_coupure}</p>
+                            <p style="margin: 5px 0;"><strong>Priorité:</strong> 
+                                <span style="color: ${color}; font-weight: 600;">${fields.Priorite}</span>
+                            </p>
+                            <p style="margin: 5px 0;"><strong>Cause(s):</strong> ${causes}</p>
+                            <p style="margin: 5px 0;"><strong>Agent:</strong> ${fields.Agent}</p>
+                            <p style="margin: 5px 0;"><strong>Statut:</strong> 
+                                <span style="padding: 2px 6px; border-radius: 3px; font-size: 11px; 
+                                    background: ${fields.Statut === 'Actif' ? '#fee' : '#efe'}; 
+                                    color: ${fields.Statut === 'Actif' ? '#c00' : '#080'};">
+                                    ${fields.Statut}
+                                </span>
+                            </p>
+                            ${fields.Description ? `<p style="margin: 5px 0;"><strong>Description:</strong><br>${fields.Description}</p>` : ''}
+                            <p style="margin: 5px 0; font-size: 11px; color: #999;">
+                                ${new Date(fields.Date_heure).toLocaleString('fr-FR')}
+                            </p>
+                        </div>
+                    </div>
+                `;
+                
+                // Créer et ajouter le marqueur
+                const marker = L.marker([fields.Latitude, fields.Longitude], { icon: icon })
+                    .bindPopup(popupContent)
+                    .addTo(map);
+                
+                existingMarkers.push(marker);
+            });
         }
         
         async function onMapClick(e) {
@@ -479,6 +606,11 @@
                 }
                 
                 showPopupMessage('success', '✓ Signalement créé !');
+                
+                // Recharger les signalements pour afficher le nouveau
+                setTimeout(() => {
+                    loadExistingSignalements();
+                }, 500);
                 
                 setTimeout(() => {
                     map.closePopup();
