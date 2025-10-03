@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Signalement Routes Coupées</title>
     <script src="https://grist.numerique.gouv.fr/grist-plugin-api.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * {
             margin: 0;
@@ -262,8 +264,9 @@
             </div>
             
             <div id="gpsBox" class="gps-box">
-                <div id="gpsStatus">📍 Position GPS</div>
-                <button id="gpsButton" class="gps-button">Activer la géolocalisation</button>
+                <div id="gpsStatus">📍 Position</div>
+                <div id="mapInstructions" class="map-instructions">👆 Cliquez sur la carte pour positionner le signalement</div>
+                <div id="miniMap"></div>
                 <div id="gpsCoords" class="gps-coords"></div>
             </div>
             
@@ -347,7 +350,9 @@
         let position = null;
         let tableId = null;
         let currentMode = 'terrain';
-        let isInGrist = false; // Détecte si on est dans Grist ou standalone
+        let isInGrist = false;
+        let miniMap = null;
+        let marker = null;
         
         // Configuration pour mode standalone
         const GRIST_CONFIG = {
@@ -355,139 +360,130 @@
             apiKey: 'c6ba01a7d00347cd2ab2f051df5d6acab380afbf'
         };
         
+        // Initialiser la mini-carte
+        function initMiniMap() {
+            // Centre sur Rennes, Ille-et-Vilaine
+            miniMap = L.map('miniMap').setView([48.1173, -1.6778], 10);
+            
+            // Fond de carte
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OSM',
+                maxZoom: 18
+            }).addTo(miniMap);
+            
+            // Clic sur la carte pour positionner
+            miniMap.on('click', function(e) {
+                setPosition(e.latlng.lat, e.latlng.lng);
+            });
+        }
+        
+        // Définir la position (depuis carte ou GPS)
+        async function setPosition(lat, lng) {
+            position = {
+                latitude: lat,
+                longitude: lng
+            };
+            
+            // Supprimer l'ancien marqueur
+            if (marker) {
+                miniMap.removeLayer(marker);
+            }
+            
+            // Ajouter un nouveau marqueur
+            marker = L.marker([lat, lng]).addTo(miniMap);
+            miniMap.setView([lat, lng], 13);
+            
+            // Mettre à jour l'affichage
+            const status = document.getElementById('gpsStatus');
+            const coords = document.getElementById('gpsCoords');
+            const instructions = document.getElementById('mapInstructions');
+            
+            status.textContent = '✅ Position définie';
+            coords.innerHTML = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            instructions.textContent = '✓ Position enregistrée - Cliquez ailleurs pour modifier';
+            instructions.classList.add('active');
+            
+            document.getElementById('gpsBox').classList.add('active');
+            
+            // Récupérer l'adresse via API gouv
+            try {
+                const response = await fetch(
+                    `https://api-adresse.data.gouv.fr/reverse/?lon=${lng}&lat=${lat}`
+                );
+                const data = await response.json();
+                
+                if (data.features && data.features.length > 0) {
+                    const props = data.features[0].properties;
+                    
+                    // Remplir commune
+                    if (props.city || props.municipality) {
+                        document.getElementById('commune').value = props.city || props.municipality;
+                    }
+                    
+                    // Remplir route
+                    if (props.name) {
+                        const routeMatch = props.name.match(/^([DN]|RD|RN)\s*(\d+)/i);
+                        if (routeMatch) {
+                            document.getElementById('route').value = routeMatch[0].replace(/\s+/g, '');
+                        } else if (props.street) {
+                            document.getElementById('route').value = props.street;
+                        }
+                    } else if (props.street) {
+                        document.getElementById('route').value = props.street;
+                    }
+                    
+                    // Afficher l'adresse
+                    if (props.label) {
+                        coords.innerHTML += `<br><small style="opacity:0.8">${props.label}</small>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Erreur géocodage:', error);
+            }
+        }
+        
         // Détecter si on est dans Grist
         if (typeof grist !== 'undefined') {
             isInGrist = true;
             console.log('Mode: Widget Grist');
             
-            // Initialisation de l'API Grist
             grist.ready({
                 requiredAccess: 'full'
             });
             
-            // Attendre que Grist soit prêt
             grist.onOptions(function(options) {
                 gristAPI = grist;
                 console.log('Grist ready!', options);
                 
-                // Lancer géolocalisation auto en mode terrain
-                if (currentMode === 'terrain') {
-                    setTimeout(getLocation, 500);
-                }
+                // Initialiser la carte
+                setTimeout(initMiniMap, 300);
             });
         } else {
             isInGrist = false;
             console.log('Mode: Page standalone');
             
-            // En mode standalone, lancer géolocalisation auto
-            if (currentMode === 'terrain') {
-                setTimeout(getLocation, 500);
-            }
+            // Initialiser la carte
+            setTimeout(initMiniMap, 300);
         }
         
         // Switch entre les modes
         function switchMode(mode) {
             currentMode = mode;
             
-            // Update button styles
             document.getElementById('modeTerrain').classList.toggle('active', mode === 'terrain');
             document.getElementById('modeBureau').classList.toggle('active', mode === 'bureau');
             
             const gpsBox = document.getElementById('gpsBox');
             
             if (mode === 'terrain') {
-                // Mode terrain : afficher GPS et activer géolocalisation auto
                 gpsBox.style.display = 'block';
-                getLocation();
             } else {
-                // Mode bureau : masquer GPS
                 gpsBox.style.display = 'none';
                 position = null;
             }
         }
         
-        // Géolocalisation
-        document.getElementById('gpsButton').addEventListener('click', getLocation);
-        
-        function getLocation() {
-            const button = document.getElementById('gpsButton');
-            const status = document.getElementById('gpsStatus');
-            const coords = document.getElementById('gpsCoords');
-            const gpsBox = document.getElementById('gpsBox');
-            
-            button.disabled = true;
-            button.innerHTML = '<span class="loader"></span> Localisation...';
-            
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    async (pos) => {
-                        position = {
-                            latitude: pos.coords.latitude,
-                            longitude: pos.coords.longitude,
-                            accuracy: pos.coords.accuracy
-                        };
-                        
-                        gpsBox.classList.add('active');
-                        status.textContent = '✅ Position obtenue !';
-                        coords.innerHTML = `📍 ${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)}<br>
-                                           <small>Précision: ±${Math.round(position.accuracy)}m</small>`;
-                        button.textContent = '🔄 Actualiser la position';
-                        button.disabled = false;
-                        
-                        // Récupérer l'adresse via API gouv
-                        try {
-                            const response = await fetch(
-                                `https://api-adresse.data.gouv.fr/reverse/?lon=${position.longitude}&lat=${position.latitude}`
-                            );
-                            const data = await response.json();
-                            
-                            if (data.features && data.features.length > 0) {
-                                const props = data.features[0].properties;
-                                
-                                // Remplir commune
-                                if (props.city || props.municipality) {
-                                    document.getElementById('commune').value = props.city || props.municipality;
-                                }
-                                
-                                // Remplir route (essayer de trouver le bon format)
-                                if (props.name) {
-                                    // Si c'est une route (D, N, etc.)
-                                    const routeMatch = props.name.match(/^([DN]|RD|RN)\s*(\d+)/i);
-                                    if (routeMatch) {
-                                        document.getElementById('route').value = routeMatch[0].replace(/\s+/g, '');
-                                    } else if (props.street) {
-                                        document.getElementById('route').value = props.street;
-                                    }
-                                } else if (props.street) {
-                                    document.getElementById('route').value = props.street;
-                                }
-                                
-                                // Afficher l'adresse complète sous les coordonnées
-                                if (props.label) {
-                                    coords.innerHTML += `<br><small style="opacity:0.8">${props.label}</small>`;
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Erreur géocodage:', error);
-                        }
-                    },
-                    (error) => {
-                        console.error('Erreur GPS:', error);
-                        showMessage('error', 'Impossible de récupérer votre position. Vérifiez les autorisations.');
-                        button.textContent = '🔄 Réessayer';
-                        button.disabled = false;
-                    },
-                    { 
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
-                showMessage('error', 'La géolocalisation n\'est pas supportée par votre navigateur.');
-                button.disabled = false;
-            }
-        }
+        // Géolocalisation (supprimée, on utilise la carte à la place)
         
         // Soumission du formulaire
         document.getElementById('submitButton').addEventListener('click', handleSubmit);
