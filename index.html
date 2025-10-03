@@ -49,6 +49,29 @@
             padding: 30px;
         }
         
+        .mode-button {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            color: #666;
+        }
+        
+        .mode-button:hover {
+            border-color: #667eea;
+        }
+        
+        .mode-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+        
         .gps-box {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -225,6 +248,19 @@
         <div class="form-container">
             <div id="messageBox" class="message"></div>
             
+            <!-- Toggle Mode -->
+            <div class="form-group">
+                <label style="margin-bottom: 15px;">Mode de signalement</label>
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="modeTerrain" class="mode-button active" onclick="switchMode('terrain')">
+                        📍 Je suis sur place
+                    </button>
+                    <button id="modeBureau" class="mode-button" onclick="switchMode('bureau')">
+                        💼 Saisie à distance
+                    </button>
+                </div>
+            </div>
+            
             <div id="gpsBox" class="gps-box">
                 <div id="gpsStatus">📍 Position GPS</div>
                 <button id="gpsButton" class="gps-button">Activer la géolocalisation</button>
@@ -310,17 +346,65 @@
         let gristAPI;
         let position = null;
         let tableId = null;
+        let currentMode = 'terrain';
+        let isInGrist = false; // Détecte si on est dans Grist ou standalone
         
-        // Initialisation de l'API Grist
-        grist.ready({
-            requiredAccess: 'full'
-        });
+        // Configuration pour mode standalone
+        const GRIST_CONFIG = {
+            apiUrl: 'https://grist.numerique.gouv.fr/api/docs/g2HLa3eYrAStdHNxgpmBPr/tables/Signalements/records',
+            apiKey: 'c6ba01a7d00347cd2ab2f051df5d6acab380afbf'
+        };
         
-        // Attendre que Grist soit prêt
-        grist.onOptions(function(options) {
-            gristAPI = grist;
-            console.log('Grist ready!', options);
-        });
+        // Détecter si on est dans Grist
+        if (typeof grist !== 'undefined') {
+            isInGrist = true;
+            console.log('Mode: Widget Grist');
+            
+            // Initialisation de l'API Grist
+            grist.ready({
+                requiredAccess: 'full'
+            });
+            
+            // Attendre que Grist soit prêt
+            grist.onOptions(function(options) {
+                gristAPI = grist;
+                console.log('Grist ready!', options);
+                
+                // Lancer géolocalisation auto en mode terrain
+                if (currentMode === 'terrain') {
+                    setTimeout(getLocation, 500);
+                }
+            });
+        } else {
+            isInGrist = false;
+            console.log('Mode: Page standalone');
+            
+            // En mode standalone, lancer géolocalisation auto
+            if (currentMode === 'terrain') {
+                setTimeout(getLocation, 500);
+            }
+        }
+        
+        // Switch entre les modes
+        function switchMode(mode) {
+            currentMode = mode;
+            
+            // Update button styles
+            document.getElementById('modeTerrain').classList.toggle('active', mode === 'terrain');
+            document.getElementById('modeBureau').classList.toggle('active', mode === 'bureau');
+            
+            const gpsBox = document.getElementById('gpsBox');
+            
+            if (mode === 'terrain') {
+                // Mode terrain : afficher GPS et activer géolocalisation auto
+                gpsBox.style.display = 'block';
+                getLocation();
+            } else {
+                // Mode bureau : masquer GPS
+                gpsBox.style.display = 'none';
+                position = null;
+            }
+        }
         
         // Géolocalisation
         document.getElementById('gpsButton').addEventListener('click', getLocation);
@@ -339,13 +423,15 @@
                     async (pos) => {
                         position = {
                             latitude: pos.coords.latitude,
-                            longitude: pos.coords.longitude
+                            longitude: pos.coords.longitude,
+                            accuracy: pos.coords.accuracy
                         };
                         
                         gpsBox.classList.add('active');
                         status.textContent = '✅ Position obtenue !';
-                        coords.textContent = `📍 ${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)}`;
-                        button.textContent = '🔄 Actualiser';
+                        coords.innerHTML = `📍 ${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)}<br>
+                                           <small>Précision: ±${Math.round(position.accuracy)}m</small>`;
+                        button.textContent = '🔄 Actualiser la position';
                         button.disabled = false;
                         
                         // Récupérer l'adresse via API gouv
@@ -357,19 +443,45 @@
                             
                             if (data.features && data.features.length > 0) {
                                 const props = data.features[0].properties;
-                                document.getElementById('commune').value = props.city || props.municipality || '';
-                                document.getElementById('route').value = props.street || '';
+                                
+                                // Remplir commune
+                                if (props.city || props.municipality) {
+                                    document.getElementById('commune').value = props.city || props.municipality;
+                                }
+                                
+                                // Remplir route (essayer de trouver le bon format)
+                                if (props.name) {
+                                    // Si c'est une route (D, N, etc.)
+                                    const routeMatch = props.name.match(/^([DN]|RD|RN)\s*(\d+)/i);
+                                    if (routeMatch) {
+                                        document.getElementById('route').value = routeMatch[0].replace(/\s+/g, '');
+                                    } else if (props.street) {
+                                        document.getElementById('route').value = props.street;
+                                    }
+                                } else if (props.street) {
+                                    document.getElementById('route').value = props.street;
+                                }
+                                
+                                // Afficher l'adresse complète sous les coordonnées
+                                if (props.label) {
+                                    coords.innerHTML += `<br><small style="opacity:0.8">${props.label}</small>`;
+                                }
                             }
                         } catch (error) {
                             console.error('Erreur géocodage:', error);
                         }
                     },
                     (error) => {
+                        console.error('Erreur GPS:', error);
                         showMessage('error', 'Impossible de récupérer votre position. Vérifiez les autorisations.');
-                        button.textContent = 'Réessayer';
+                        button.textContent = '🔄 Réessayer';
                         button.disabled = false;
                     },
-                    { enableHighAccuracy: true }
+                    { 
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
                 );
             } else {
                 showMessage('error', 'La géolocalisation n\'est pas supportée par votre navigateur.');
@@ -413,13 +525,13 @@
             try {
                 // Préparer les données pour Grist
                 const record = {
-                    Date_Heure: new Date().toISOString(),
+                    Date_heure: new Date().toISOString(),
                     Agent: agent,
                     Latitude: position ? position.latitude : null,
                     Longitude: position ? position.longitude : null,
                     Route: route,
                     Commune: commune,
-                    Type_Coupure: typeCoupure,
+                    Type_coupure: typeCoupure,
                     Cause: ['L', ...causes],
                     Description: description,
                     Statut: 'Actif',
@@ -428,12 +540,36 @@
                 
                 console.log('Sending record:', record);
                 
-                // Ajouter le record via l'API Grist Widget
-                const result = await gristAPI.docApi.applyUserActions([
-                    ['AddRecord', 'Signalements', null, record]
-                ]);
-                
-                console.log('Result:', result);
+                if (isInGrist) {
+                    // Mode Widget Grist : utiliser l'API Widget
+                    const result = await gristAPI.docApi.applyUserActions([
+                        ['AddRecord', 'Signalements', null, record]
+                    ]);
+                    console.log('Result:', result);
+                } else {
+                    // Mode Standalone : utiliser l'API REST
+                    const payload = {
+                        records: [{
+                            fields: record
+                        }]
+                    };
+                    
+                    const response = await fetch(GRIST_CONFIG.apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${GRIST_CONFIG.apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Erreur API');
+                    }
+                    
+                    console.log('API Response OK');
+                }
                 
                 showMessage('success', '✅ Signalement enregistré avec succès !');
                 
