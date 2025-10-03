@@ -523,34 +523,51 @@
             button.innerHTML = '<span class="loader"></span> Envoi en cours...';
             
             try {
-                // Préparer les données pour Grist
-                const record = {
-                    Date_heure: new Date().toISOString(),
-                    Agent: agent,
-                    Latitude: position ? position.latitude : null,
-                    Longitude: position ? position.longitude : null,
-                    Route: route,
-                    Commune: commune,
-                    Type_coupure: typeCoupure,
-                    Cause: ['L', ...causes],
-                    Description: description,
-                    Statut: 'Actif',
-                    Priorite: priorite
-                };
-                
-                console.log('Sending record:', record);
+                console.log('Sending record:', 'Mode:', isInGrist ? 'Grist' : 'Standalone');
                 
                 if (isInGrist) {
-                    // Mode Widget Grist : utiliser l'API Widget
+                    // Mode Widget Grist : utiliser l'API Widget avec format spécial pour ChoiceList
+                    const recordGrist = {
+                        Date_heure: new Date().toISOString(),
+                        Agent: agent,
+                        Latitude: position ? position.latitude : null,
+                        Longitude: position ? position.longitude : null,
+                        Route: route,
+                        Commune: commune,
+                        Type_coupure: typeCoupure,
+                        Cause: ['L', ...causes], // Format spécial Grist Widget
+                        Description: description,
+                        Statut: 'Actif',
+                        Priorite: priorite
+                    };
+                    
+                    console.log('Record (Grist):', recordGrist);
+                    
                     const result = await gristAPI.docApi.applyUserActions([
-                        ['AddRecord', 'Signalements', null, record]
+                        ['AddRecord', 'Signalements', null, recordGrist]
                     ]);
                     console.log('Result:', result);
                 } else {
-                    // Mode Standalone : utiliser l'API REST
+                    // Mode Standalone : utiliser l'API REST avec format normal
+                    const recordREST = {
+                        Date_heure: new Date().toISOString(),
+                        Agent: agent,
+                        Latitude: position ? position.latitude : null,
+                        Longitude: position ? position.longitude : null,
+                        Route: route,
+                        Commune: commune,
+                        Type_coupure: typeCoupure,
+                        Cause: causes, // Format normal pour API REST
+                        Description: description,
+                        Statut: 'Actif',
+                        Priorite: priorite
+                    };
+                    
+                    console.log('Record (REST):', recordREST);
+                    
                     const payload = {
                         records: [{
-                            fields: record
+                            fields: recordREST
                         }]
                     };
                     
