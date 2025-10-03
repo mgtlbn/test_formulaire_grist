@@ -309,27 +309,17 @@
     <script>
         let gristAPI;
         let position = null;
+        let tableId = null;
         
         // Initialisation de l'API Grist
         grist.ready({
-            requiredAccess: 'full',
-            columns: [
-                { name: 'Date_Heure', type: 'DateTime' },
-                { name: 'Agent', type: 'Text' },
-                { name: 'Latitude', type: 'Numeric' },
-                { name: 'Longitude', type: 'Numeric' },
-                { name: 'Route', type: 'Text' },
-                { name: 'Commune', type: 'Text' },
-                { name: 'Type_Coupure', type: 'Text' },
-                { name: 'Cause', type: 'ChoiceList' },
-                { name: 'Description', type: 'Text' },
-                { name: 'Statut', type: 'Text' },
-                { name: 'Priorite', type: 'Text' }
-            ]
+            requiredAccess: 'full'
         });
         
-        grist.onReady(function() {
+        // Attendre que Grist soit prêt
+        grist.onOptions(function(options) {
             gristAPI = grist;
+            console.log('Grist ready!', options);
         });
         
         // Géolocalisation
@@ -430,16 +420,20 @@
                     Route: route,
                     Commune: commune,
                     Type_Coupure: typeCoupure,
-                    Cause: causes,
+                    Cause: ['L', ...causes],
                     Description: description,
                     Statut: 'Actif',
                     Priorite: priorite
                 };
                 
+                console.log('Sending record:', record);
+                
                 // Ajouter le record via l'API Grist Widget
-                await gristAPI.docApi.applyUserActions([
+                const result = await gristAPI.docApi.applyUserActions([
                     ['AddRecord', 'Signalements', null, record]
                 ]);
+                
+                console.log('Result:', result);
                 
                 showMessage('success', '✅ Signalement enregistré avec succès !');
                 
@@ -459,8 +453,8 @@
                 }, 3000);
                 
             } catch (error) {
-                console.error('Erreur:', error);
-                showMessage('error', 'Erreur lors de l\'enregistrement: ' + error.message);
+                console.error('Erreur complète:', error);
+                showMessage('error', 'Erreur lors de l\'enregistrement: ' + (error.message || JSON.stringify(error)));
             } finally {
                 button.disabled = false;
                 button.innerHTML = '📤 Envoyer le signalement';
