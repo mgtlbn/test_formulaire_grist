@@ -40,6 +40,11 @@
             font-weight: 600;
             font-size: 14px;
             pointer-events: none;
+            transition: all 0.3s;
+        }
+        
+        .instruction-banner.step2 {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         }
         
         .popup-form {
@@ -199,8 +204,8 @@
     </style>
 </head>
 <body>
-    <div class="instruction-banner">
-        📍 Cliquez sur la carte pour créer un signalement
+    <div id="banner" class="instruction-banner">
+        🔵 Cliquez pour marquer le DÉBUT du tronçon coupé
     </div>
     
     <div id="map"></div>
@@ -211,6 +216,13 @@
         let gristAPI = null;
         let isInGrist = false;
         let existingMarkers = [];
+        
+        // Variables pour le mode tronçon
+        let tronconMode = false;
+        let startPoint = null;
+        let startMarker = null;
+        let endMarker = null;
+        let tronconLine = null;
         
         const GRIST_CONFIG = {
             apiUrl: 'https://grist.numerique.gouv.fr/api/docs/g2HLa3eYrAStdHNxgpmBPr/tables/Signalements/records',
@@ -384,54 +396,165 @@
             const lat = e.latlng.lat;
             const lng = e.latlng.lng;
             
-            // Supprimer l'ancien marqueur temporaire
-            if (tempMarker) {
-                map.removeLayer(tempMarker);
-            }
-            
-            // Créer un nouveau marqueur temporaire
-            tempMarker = L.marker([lat, lng]).addTo(map);
-            
-            // Récupérer l'adresse
-            let adresseInfo = { route: '', commune: '' };
-            try {
-                const response = await fetch(
-                    `https://api-adresse.data.gouv.fr/reverse/?lon=${lng}&lat=${lat}`
-                );
-                const data = await response.json();
+            if (!tronconMode) {
+                // Premier clic - Début du tronçon
+                startPoint = { lat: lat, lng: lng };
+                tronconMode = true;
                 
-                if (data.features && data.features.length > 0) {
-                    const props = data.features[0].properties;
-                    
-                    if (props.city || props.municipality) {
-                        adresseInfo.commune = props.city || props.municipality;
+                // Marqueur début (bleu)
+                if (startMarker) map.removeLayer(startMarker);
+                startMarker = L.circleMarker([lat, lng], {
+                    radius: 8,
+                    fillColor: '#007bff',
+                    color: 'white',
+                    weight: 3,
+                    fillOpacity: 1
+                }).addTo(map);
+                
+                // Changer l'instruction
+                document.getElementById('banner').textContent = '🔴 Cliquez pour marquer la FIN du tronçon coupé';
+                document.getElementById('banner').classList.add('step2');
+                
+            } else {
+                // Deuxième clic - Fin du tronçon
+                const endPoint = { lat: lat, lng: lng };
+                
+                // Marqueur fin (rouge)
+                if (endMarker) map.removeLayer(endMarker);
+                endMarker = L.circleMarker([lat, lng], {
+                    radius: 8,
+                    fillColor: '#dc3545',
+                    color: 'white',
+                    weight: 3,
+                    fillOpacity: 1
+                }).addTo(map);
+                
+                // Tracer la ligne
+                if (tronconLine) map.removeLayer(tronconLine);
+                tronconLine = L.polyline(
+                    [[startPoint.lat, startPoint.lng], [endPoint.lat, endPoint.lng]], 
+                    {
+                        color: '#dc3545',
+                        weight: 5,
+                        opacity: 0.7
                     }
-                    
-                    if (props.name) {
-                        const routeMatch = props.name.match(/^([DN]|RD|RN)\s*(\d+)/i);
-                        if (routeMatch) {
-                            adresseInfo.route = routeMatch[0].replace(/\s+/g, '');
-                        } else if (props.street) {
-                            adresseInfo.route = props.street;
-                        }
-                    } else if (props.street) {
-                        adresseInfo.route = props.street;
-                    }
-                }
-            } catch (error) {
-                console.error('Erreur géocodage:', error);
+                ).addTo(map);
+                
+                // Calculer la distance
+                const distance = calculateDistance(startPoint.lat, startPoint.lng, lat, lng);
+                
+                // Récupérer les infos de la route (au point du milieu pour plus de précision)
+                const midLat = (startPoint.lat + lat) / 2;
+                const midLng = (startPoint.lng + lng) / 2;
+                
+                const adresseInfo = await getRouteInfo(midLat, midLng);
+                
+                // Ouvrir le formulaire
+                showFormPopup(startPoint, endPoint, distance, adresseInfo);
+                
+                // Réinitialiser le mode
+                document.getElementById('banner').textContent = '🔵 Cliquez pour marquer le DÉBUT du tronçon coupé';
+                document.getElementById('banner').classList.remove('step2');
+                tronconMode = false;
             }
-            
-            // Ouvrir le formulaire dans un popup
-            showFormPopup(lat, lng, adresseInfo);
         }
         
-        function showFormPopup(lat, lng, adresseInfo) {
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Rayon de la Terre en km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return (R * c * 1000).toFixed(0); // Distance en mètres
+        }
+        
+        async function getRouteInfo(lat, lng) {
+            let routeInfo = { route: '', commune: '' };
+            
+            try {
+                // Essayer plusieurs APIs pour améliorer la détection
+                
+                // 1. API Adresse Data Gouv (principale)
+                const response1 = await fetch(
+                    `https://api-adresse.data.gouv.fr/reverse/?lon=${lng}&lat=${lat}`
+                );
+                const data1 = await response1.json();
+                
+                if (data1.features && data1.features.length > 0) {
+                    const props = data1.features[0].properties;
+                    
+                    // Commune
+                    routeInfo.commune = props.city || props.municipality || props.village || '';
+                    
+                    // Route - Essayer plusieurs patterns
+                    if (props.name) {
+                        // Chercher les routes départementales/nationales
+                        const routePatterns = [
+                            /^(D|N|RD|RN|CD)\s*(\d+[A-Z]?)/i,  // D137, N137, RD177, etc.
+                            /Route\s+(Départementale|Nationale)\s+(\d+)/i,
+                            /(D|N)\s*(\d+)/i
+                        ];
+                        
+                        for (let pattern of routePatterns) {
+                            const match = props.name.match(pattern);
+                            if (match) {
+                                routeInfo.route = match[0].replace(/\s+/g, '').toUpperCase();
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Si pas trouvé, utiliser le nom de rue
+                    if (!routeInfo.route && props.street) {
+                        routeInfo.route = props.street;
+                    }
+                    
+                    // Fallback sur le nom complet
+                    if (!routeInfo.route && props.name) {
+                        routeInfo.route = props.name;
+                    }
+                }
+                
+                // 2. Si toujours pas de route, essayer avec une recherche élargie
+                if (!routeInfo.route) {
+                    const response2 = await fetch(
+                        `https://api-adresse.data.gouv.fr/search/?lon=${lng}&lat=${lat}&limit=1`
+                    );
+                    const data2 = await response2.json();
+                    
+                    if (data2.features && data2.features.length > 0) {
+                        const props = data2.features[0].properties;
+                        if (props.name) {
+                            const match = props.name.match(/^(D|N|RD|RN)\s*(\d+)/i);
+                            if (match) {
+                                routeInfo.route = match[0].replace(/\s+/g, '');
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Erreur récupération route:', error);
+            }
+            
+            return routeInfo;
+        }
+        
+        function showFormPopup(startPoint, endPoint, distance, adresseInfo) {
+            // Calculer le point du milieu pour afficher le popup
+            const midLat = (startPoint.lat + endPoint.lat) / 2;
+            const midLng = (startPoint.lng + endPoint.lng) / 2;
             const popupContent = `
                 <div class="popup-form">
                     <div class="popup-header">
-                        <h3>📍 Nouveau signalement</h3>
-                        <div class="popup-coords">${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
+                        <h3>📍 Nouveau signalement - Tronçon</h3>
+                        <div class="popup-coords">
+                            Longueur: ${distance}m
+                            <br>Début: ${startPoint.lat.toFixed(6)}, ${startPoint.lng.toFixed(6)}
+                            <br>Fin: ${endPoint.lat.toFixed(6)}, ${endPoint.lng.toFixed(6)}
+                        </div>
                     </div>
                     
                     <div id="message"></div>
@@ -505,7 +628,7 @@
                         <textarea id="description" rows="3" placeholder="Détails..."></textarea>
                     </div>
                     
-                    <button class="btn-submit" onclick="submitSignalement(${lat}, ${lng})">
+                    <button class="btn-submit" onclick="submitSignalement({lat: ${startPoint.lat}, lng: ${startPoint.lng}}, {lat: ${endPoint.lat}, lng: ${endPoint.lng}}, ${distance})">
                         ✓ Créer le signalement
                     </button>
                     
@@ -515,10 +638,14 @@
                 </div>
             `;
             
-            tempMarker.bindPopup(popupContent, {
+            // Créer un popup au milieu du tronçon
+            const popup = L.popup({
                 maxWidth: 350,
                 closeButton: false
-            }).openPopup();
+            })
+            .setLatLng([midLat, midLng])
+            .setContent(popupContent)
+            .openOn(map);
         }
         
         window.submitSignalement = async function(lat, lng) {
