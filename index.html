@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Signalement Routes Coupées</title>
-    <script src="https://grist.numerique.gouv.fr/grist-plugin-api.js"></script>
+    <title>Carte Signalements - Ille-et-Vilaine</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -14,215 +15,176 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
-            min-height: 100vh;
-        }
-        
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            height: 100vh;
             overflow: hidden;
         }
         
-        .header {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        #map {
+            height: 100vh;
+            width: 100%;
+            cursor: crosshair;
+        }
+        
+        .instruction-banner {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
-        
-        .header p {
+            padding: 12px 24px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            font-weight: 600;
             font-size: 14px;
+            pointer-events: none;
+        }
+        
+        .popup-form {
+            width: 320px;
+            padding: 0;
+        }
+        
+        .popup-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            margin: -20px -20px 15px -20px;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .popup-header h3 {
+            margin: 0;
+            font-size: 16px;
+        }
+        
+        .popup-coords {
+            font-size: 11px;
             opacity: 0.9;
-        }
-        
-        .form-container {
-            padding: 30px;
-        }
-        
-        .mode-button {
-            flex: 1;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            background: white;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s;
-            color: #666;
-        }
-        
-        .mode-button:hover {
-            border-color: #667eea;
-        }
-        
-        .mode-button.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: transparent;
-        }
-        
-        .gps-box {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            text-align: center;
-        }
-        
-        .gps-box.active {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        }
-        
-        .gps-button {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            border: 2px solid white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            margin-top: 10px;
-            transition: all 0.3s;
-        }
-        
-        .gps-button:hover {
-            background: white;
-            color: #667eea;
-        }
-        
-        .gps-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+            margin-top: 5px;
         }
         
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
-        label {
+        .form-group label {
             display: block;
+            font-size: 12px;
             font-weight: 600;
+            margin-bottom: 5px;
             color: #333;
-            margin-bottom: 8px;
-            font-size: 14px;
         }
         
-        input[type="text"],
-        select,
-        textarea {
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
             width: 100%;
-            padding: 12px;
+            padding: 8px;
             border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
+            border-radius: 6px;
+            font-size: 13px;
             font-family: inherit;
         }
         
-        input:focus,
-        select:focus,
-        textarea:focus {
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
             outline: none;
             border-color: #667eea;
         }
         
         .checkbox-group {
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
         }
         
         .checkbox-item {
-            margin-bottom: 10px;
             display: flex;
             align-items: center;
+            gap: 5px;
         }
         
-        .checkbox-item:last-child {
-            margin-bottom: 0;
-        }
-        
-        .checkbox-item input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            margin-right: 10px;
-            cursor: pointer;
+        .checkbox-item input {
+            width: auto;
         }
         
         .checkbox-item label {
             margin: 0;
-            cursor: pointer;
             font-weight: 400;
+            font-size: 12px;
         }
         
-        .submit-button {
+        .btn-submit {
             width: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 12px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
             color: white;
             border: none;
-            padding: 15px;
             border-radius: 8px;
-            font-size: 16px;
             font-weight: 600;
+            font-size: 14px;
             cursor: pointer;
-            transition: transform 0.2s;
-            margin-top: 20px;
+            margin-top: 10px;
         }
         
-        .submit-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        .btn-submit:hover {
+            opacity: 0.9;
         }
         
-        .submit-button:disabled {
+        .btn-submit:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
         
-        .message {
-            padding: 15px;
+        .btn-cancel {
+            width: 100%;
+            padding: 10px;
+            background: #6c757d;
+            color: white;
+            border: none;
             border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: none;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 8px;
         }
         
-        .message.success {
+        .success-message {
             background: #d4edda;
             color: #155724;
-            border: 1px solid #c3e6cb;
-            display: block;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            text-align: center;
+            font-weight: 600;
         }
         
-        .message.error {
+        .error-message {
             background: #f8d7da;
             color: #721c24;
-            border: 1px solid #f5c6cb;
-            display: block;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 13px;
         }
         
-        .loader {
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top: 3px solid white;
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
+            width: 30px;
+            height: 30px;
             animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 10px;
+            margin: 0 auto 10px;
         }
         
         @keyframes spin {
@@ -230,329 +192,205 @@
             100% { transform: rotate(360deg); }
         }
         
-        .gps-coords {
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            margin-top: 8px;
-            opacity: 0.9;
+        .leaflet-popup-content {
+            margin: 20px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🚧 Signalement Route Coupée</h1>
-            <p>Département Ille-et-Vilaine (35)</p>
-        </div>
-        
-        <div class="form-container">
-            <div id="messageBox" class="message"></div>
-            
-            <!-- Toggle Mode -->
-            <div class="form-group">
-                <label style="margin-bottom: 15px;">Mode de signalement</label>
-                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                    <button id="modeTerrain" class="mode-button active" onclick="switchMode('terrain')">
-                        📍 Je suis sur place
-                    </button>
-                    <button id="modeBureau" class="mode-button" onclick="switchMode('bureau')">
-                        💼 Saisie à distance
-                    </button>
-                </div>
-            </div>
-            
-            <div id="gpsBox" class="gps-box">
-                <div id="gpsStatus">📍 Localisation du problème</div>
-                <div id="mapInstructions" class="map-instructions">🔍 Recherchez une adresse ou route</div>
-                
-                <div style="margin-bottom: 15px;">
-                    <input 
-                        type="text" 
-                        id="searchAddress" 
-                        placeholder="Ex: D137 Rennes, Place de la Mairie..."
-                        style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px;"
-                    >
-                    <button 
-                        id="searchBtn"
-                        style="width: 100%; margin-top: 8px; padding: 10px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;"
-                    >
-                        🔍 Rechercher
-                    </button>
-                </div>
-                
-                <div id="searchResults" style="display: none; margin-bottom: 15px;">
-                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #666;">Résultats trouvés :</div>
-                    <div id="resultsList"></div>
-                </div>
-                
-                <div id="precisionBox" style="display: none; margin-top: 15px; padding: 15px; background: rgba(102, 126, 234, 0.1); border-radius: 8px;">
-                    <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #667eea;">
-                        Précision du point (optionnel)
-                    </label>
-                    <input 
-                        type="text" 
-                        id="precisionInput" 
-                        placeholder="Ex: PK 12.5, Pont de Nemours, entre Rennes et Cesson..."
-                        style="width: 100%; padding: 8px; border: 2px solid #667eea; border-radius: 6px; font-size: 13px;"
-                    >
-                    <div style="font-size: 11px; color: #666; margin-top: 5px;">
-                        Cette info sera ajoutée à la description
-                    </div>
-                </div>
-                
-                <div id="gpsCoords" class="gps-coords"></div>
-            </div>
-            
-            <div class="form-group">
-                <label for="agent">Nom de l'agent *</label>
-                <input type="text" id="agent" placeholder="Ex: Jean Dupont" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="route">Route concernée *</label>
-                <input type="text" id="route" placeholder="Ex: D137, N137, RD177" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="commune">Commune *</label>
-                <input type="text" id="commune" placeholder="Ex: Rennes, Saint-Malo" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="typeCoupure">Type de coupure *</label>
-                <select id="typeCoupure" required>
-                    <option value="Totale">Totale (circulation impossible)</option>
-                    <option value="Partielle">Partielle (circulation alternée)</option>
-                    <option value="Déviation">Déviation en place</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label>Cause(s) * (sélection multiple)</label>
-                <div class="checkbox-group">
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="cause1" value="Inondation">
-                        <label for="cause1">Inondation</label>
-                    </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="cause2" value="Accident">
-                        <label for="cause2">Accident</label>
-                    </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="cause3" value="Travaux">
-                        <label for="cause3">Travaux</label>
-                    </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="cause4" value="Arbre">
-                        <label for="cause4">Arbre / Végétation</label>
-                    </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="cause5" value="Glissement">
-                        <label for="cause5">Glissement de terrain</label>
-                    </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="cause6" value="Autre">
-                        <label for="cause6">Autre</label>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="priorite">Priorité *</label>
-                <select id="priorite" required>
-                    <option value="Basse">Basse</option>
-                    <option value="Moyenne" selected>Moyenne</option>
-                    <option value="Haute">Haute</option>
-                    <option value="Critique">Critique</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="description">Description / Observations</label>
-                <textarea id="description" rows="4" placeholder="Détails supplémentaires, dangers identifiés, etc."></textarea>
-            </div>
-            
-            <button id="submitButton" class="submit-button">
-                📤 Envoyer le signalement
-            </button>
-        </div>
+    <div class="instruction-banner">
+        📍 Cliquez sur la carte pour créer un signalement
     </div>
+    
+    <div id="map"></div>
 
     <script>
-        let gristAPI;
-        let position = null;
-        let tableId = null;
-        let currentMode = 'terrain';
+        let map;
+        let tempMarker = null;
+        let gristAPI = null;
         let isInGrist = false;
-        let selectedResult = null;
         
-        // Configuration pour mode standalone
         const GRIST_CONFIG = {
             apiUrl: 'https://grist.numerique.gouv.fr/api/docs/g2HLa3eYrAStdHNxgpmBPr/tables/Signalements/records',
             apiKey: 'c6ba01a7d00347cd2ab2f051df5d6acab380afbf'
         };
         
-        // Recherche d'adresse
-        document.getElementById('searchBtn').addEventListener('click', searchAddress);
-        document.getElementById('searchAddress').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') searchAddress();
-        });
+        // Détecter si on est dans Grist
+        if (typeof grist !== 'undefined') {
+            isInGrist = true;
+            grist.ready({ requiredAccess: 'full' });
+            grist.onOptions(function(options) {
+                gristAPI = grist;
+                console.log('Grist ready!');
+            });
+        }
         
-        async function searchAddress() {
-            const query = document.getElementById('searchAddress').value.trim();
-            
-            if (!query) {
-                showMessage('error', 'Veuillez entrer une adresse ou route');
+        // Initialiser la carte
+        function initMap() {
+            // Vérifier que Leaflet est chargé
+            if (typeof L === 'undefined') {
+                console.log('Leaflet pas chargé, réessai...');
+                setTimeout(initMap, 300);
                 return;
             }
             
-            document.getElementById('searchBtn').textContent = '🔍 Recherche...';
-            document.getElementById('searchBtn').disabled = true;
+            console.log('Initialisation carte...');
             
+            map = L.map('map').setView([48.1173, -1.6778], 10);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 18
+            }).addTo(map);
+            
+            // Clic sur la carte
+            map.on('click', onMapClick);
+            
+            console.log('Carte prête !');
+        }
+        
+        async function onMapClick(e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+            
+            // Supprimer l'ancien marqueur temporaire
+            if (tempMarker) {
+                map.removeLayer(tempMarker);
+            }
+            
+            // Créer un nouveau marqueur temporaire
+            tempMarker = L.marker([lat, lng]).addTo(map);
+            
+            // Récupérer l'adresse
+            let adresseInfo = { route: '', commune: '' };
             try {
                 const response = await fetch(
-                    `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=5`
+                    `https://api-adresse.data.gouv.fr/reverse/?lon=${lng}&lat=${lat}`
                 );
                 const data = await response.json();
                 
                 if (data.features && data.features.length > 0) {
-                    displayResults(data.features);
-                } else {
-                    showMessage('error', 'Aucun résultat trouvé. Essayez une autre recherche.');
-                    document.getElementById('searchResults').style.display = 'none';
+                    const props = data.features[0].properties;
+                    
+                    if (props.city || props.municipality) {
+                        adresseInfo.commune = props.city || props.municipality;
+                    }
+                    
+                    if (props.name) {
+                        const routeMatch = props.name.match(/^([DN]|RD|RN)\s*(\d+)/i);
+                        if (routeMatch) {
+                            adresseInfo.route = routeMatch[0].replace(/\s+/g, '');
+                        } else if (props.street) {
+                            adresseInfo.route = props.street;
+                        }
+                    } else if (props.street) {
+                        adresseInfo.route = props.street;
+                    }
                 }
             } catch (error) {
-                console.error('Erreur recherche:', error);
-                showMessage('error', 'Erreur lors de la recherche');
-            } finally {
-                document.getElementById('searchBtn').textContent = '🔍 Rechercher';
-                document.getElementById('searchBtn').disabled = false;
+                console.error('Erreur géocodage:', error);
             }
+            
+            // Ouvrir le formulaire dans un popup
+            showFormPopup(lat, lng, adresseInfo);
         }
         
-        function displayResults(features) {
-            const resultsList = document.getElementById('resultsList');
-            const resultsBox = document.getElementById('searchResults');
-            
-            resultsList.innerHTML = '';
-            
-            features.forEach((feature, index) => {
-                const props = feature.properties;
-                const coords = feature.geometry.coordinates;
-                
-                const resultDiv = document.createElement('div');
-                resultDiv.className = 'result-item';
-                resultDiv.innerHTML = `
-                    <div class="result-label">📍 ${props.label}</div>
-                    <div class="result-context">
-                        ${props.context ? props.context : ''}
-                        ${props.type ? ` • Type: ${props.type}` : ''}
+        function showFormPopup(lat, lng, adresseInfo) {
+            const popupContent = `
+                <div class="popup-form">
+                    <div class="popup-header">
+                        <h3>📍 Nouveau signalement</h3>
+                        <div class="popup-coords">${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
                     </div>
-                `;
-                
-                resultDiv.addEventListener('click', function() {
-                    selectResult(feature, resultDiv);
-                });
-                
-                resultsList.appendChild(resultDiv);
-            });
+                    
+                    <div id="message"></div>
+                    
+                    <div class="form-group">
+                        <label>Nom de l'agent *</label>
+                        <input type="text" id="agent" placeholder="Ex: Jean Dupont" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Route *</label>
+                        <input type="text" id="route" value="${adresseInfo.route}" placeholder="Ex: D137" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Commune *</label>
+                        <input type="text" id="commune" value="${adresseInfo.commune}" placeholder="Ex: Rennes" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Type de coupure *</label>
+                        <select id="typeCoupure">
+                            <option value="Totale">Totale</option>
+                            <option value="Partielle">Partielle</option>
+                            <option value="Déviation">Déviation</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Cause(s) *</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c1" value="Inondation">
+                                <label for="c1">Inondation</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c2" value="Accident">
+                                <label for="c2">Accident</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c3" value="Travaux">
+                                <label for="c3">Travaux</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c4" value="Arbre">
+                                <label for="c4">Arbre</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c5" value="Glissement">
+                                <label for="c5">Glissement</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c6" value="Autre">
+                                <label for="c6">Autre</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Priorité *</label>
+                        <select id="priorite">
+                            <option value="Basse">Basse</option>
+                            <option value="Moyenne" selected>Moyenne</option>
+                            <option value="Haute">Haute</option>
+                            <option value="Critique">Critique</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="description" rows="3" placeholder="Détails..."></textarea>
+                    </div>
+                    
+                    <button class="btn-submit" onclick="submitSignalement(${lat}, ${lng})">
+                        ✓ Créer le signalement
+                    </button>
+                    
+                    <button class="btn-cancel" onclick="cancelSignalement()">
+                        Annuler
+                    </button>
+                </div>
+            `;
             
-            resultsBox.style.display = 'block';
+            tempMarker.bindPopup(popupContent, {
+                maxWidth: 350,
+                closeButton: false
+            }).openPopup();
         }
         
-        function selectResult(feature, element) {
-            // Désélectionner les autres
-            document.querySelectorAll('.result-item').forEach(item => {
-                item.classList.remove('selected');
-            });
-            
-            // Sélectionner celui-ci
-            element.classList.add('selected');
-            selectedResult = feature;
-            
-            const props = feature.properties;
-            const coords = feature.geometry.coordinates; // [lng, lat]
-            
-            // Définir la position
-            position = {
-                latitude: coords[1],
-                longitude: coords[0]
-            };
-            
-            // Mettre à jour l'affichage
-            const status = document.getElementById('gpsStatus');
-            const coordsDiv = document.getElementById('gpsCoords');
-            const instructions = document.getElementById('mapInstructions');
-            
-            status.textContent = '✅ Position définie';
-            coordsDiv.innerHTML = `📍 ${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)}<br>
-                                   <small style="opacity:0.8">${props.label}</small>`;
-            instructions.textContent = '✓ Position enregistrée';
-            instructions.classList.add('active');
-            
-            document.getElementById('gpsBox').classList.add('active');
-            
-            // Afficher le champ de précision
-            document.getElementById('precisionBox').style.display = 'block';
-            
-            // Pré-remplir les champs
-            if (props.city || props.municipality) {
-                document.getElementById('commune').value = props.city || props.municipality;
-            }
-            
-            if (props.name) {
-                const routeMatch = props.name.match(/^([DN]|RD|RN)\s*(\d+)/i);
-                if (routeMatch) {
-                    document.getElementById('route').value = routeMatch[0].replace(/\s+/g, '');
-                } else if (props.street) {
-                    document.getElementById('route').value = props.street;
-                }
-            } else if (props.street) {
-                document.getElementById('route').value = props.street;
-            }
-        }
-        
-        // Initialisation (sans carte Leaflet)
-        if (typeof grist !== 'undefined') {
-            isInGrist = true;
-            console.log('Mode: Widget Grist');
-            
-            grist.ready({
-                requiredAccess: 'full'
-            });
-            
-            grist.onOptions(function(options) {
-                gristAPI = grist;
-                console.log('Grist ready!', options);
-            });
-        } else {
-            isInGrist = false;
-            console.log('Mode: Page standalone');
-        }
-        
-        // Switch entre les modes
-        function switchMode(mode) {
-            currentMode = mode;
-            
-            document.getElementById('modeTerrain').classList.toggle('active', mode === 'terrain');
-            document.getElementById('modeBureau').classList.toggle('active', mode === 'bureau');
-            
-            const gpsBox = document.getElementById('gpsBox');
-            
-            if (mode === 'terrain') {
-                gpsBox.style.display = 'block';
-            } else {
-                gpsBox.style.display = 'none';
-                position = null;
-            }
-        }
-        
-        // Géolocalisation supprimée - on utilise la recherche d'adresse
-        
-        // Soumission du formulaire
-        document.getElementById('submitButton').addEventListener('click', handleSubmit);
-        
-        async function handleSubmit() {
+        window.submitSignalement = async function(lat, lng) {
             const agent = document.getElementById('agent').value.trim();
             const route = document.getElementById('route').value.trim();
             const commune = document.getElementById('commune').value.trim();
@@ -560,82 +398,62 @@
             const priorite = document.getElementById('priorite').value;
             const description = document.getElementById('description').value.trim();
             
-            // Récupérer les causes cochées
             const causes = [];
-            document.querySelectorAll('.checkbox-group input[type="checkbox"]:checked').forEach(cb => {
-                causes.push(cb.value);
-            });
+            for (let i = 1; i <= 6; i++) {
+                const cb = document.getElementById('c' + i);
+                if (cb && cb.checked) causes.push(cb.value);
+            }
             
             // Validation
             if (!agent || !route || !commune) {
-                showMessage('error', 'Veuillez remplir tous les champs obligatoires (*)');
+                showPopupMessage('error', 'Veuillez remplir tous les champs obligatoires');
                 return;
             }
             
             if (causes.length === 0) {
-                showMessage('error', 'Veuillez sélectionner au moins une cause');
+                showPopupMessage('error', 'Sélectionnez au moins une cause');
                 return;
             }
             
-            // Ajouter la précision à la description si renseignée
-            let finalDescription = description;
-            const precision = document.getElementById('precisionInput').value.trim();
-            if (precision) {
-                finalDescription = `[Point précis: ${precision}]${description ? '\n' + description : ''}`;
-            }
-            
             // Désactiver le bouton
-            const button = document.getElementById('submitButton');
-            button.disabled = true;
-            button.innerHTML = '<span class="loader"></span> Envoi en cours...';
+            const btn = document.querySelector('.btn-submit');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="spinner"></div>Envoi...';
             
             try {
-                console.log('Sending record:', 'Mode:', isInGrist ? 'Grist' : 'Standalone');
-                
-                if (isInGrist) {
-                    // Mode Widget Grist : utiliser l'API Widget avec format spécial pour ChoiceList
-                    const recordGrist = {
+                if (isInGrist && gristAPI) {
+                    // Mode Grist Widget
+                    const record = {
                         Date_heure: new Date().toISOString(),
                         Agent: agent,
-                        Latitude: position ? position.latitude : null,
-                        Longitude: position ? position.longitude : null,
+                        Latitude: lat,
+                        Longitude: lng,
                         Route: route,
                         Commune: commune,
                         Type_coupure: typeCoupure,
-                        Cause: ['L', ...causes], // Format spécial Grist Widget
-                        Description: finalDescription,
+                        Cause: ['L', ...causes],
+                        Description: description,
                         Statut: 'Actif',
                         Priorite: priorite
                     };
                     
-                    console.log('Record (Grist):', recordGrist);
-                    
-                    const result = await gristAPI.docApi.applyUserActions([
-                        ['AddRecord', 'Signalements', null, recordGrist]
+                    await gristAPI.docApi.applyUserActions([
+                        ['AddRecord', 'Signalements', null, record]
                     ]);
-                    console.log('Result:', result);
                 } else {
-                    // Mode Standalone : utiliser l'API REST avec format normal
-                    const recordREST = {
+                    // Mode Standalone
+                    const record = {
                         Date_heure: new Date().toISOString(),
                         Agent: agent,
-                        Latitude: position ? position.latitude : null,
-                        Longitude: position ? position.longitude : null,
+                        Latitude: lat,
+                        Longitude: lng,
                         Route: route,
                         Commune: commune,
                         Type_coupure: typeCoupure,
-                        Cause: causes, // Format normal pour API REST
-                        Description: finalDescription,
+                        Cause: causes,
+                        Description: description,
                         Statut: 'Actif',
                         Priorite: priorite
-                    };
-                    
-                    console.log('Record (REST):', recordREST);
-                    
-                    const payload = {
-                        records: [{
-                            fields: recordREST
-                        }]
                     };
                     
                     const response = await fetch(GRIST_CONFIG.apiUrl, {
@@ -644,62 +462,47 @@
                             'Authorization': `Bearer ${GRIST_CONFIG.apiKey}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(payload)
+                        body: JSON.stringify({ records: [{ fields: record }] })
                     });
                     
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.error || 'Erreur API');
-                    }
-                    
-                    console.log('API Response OK');
+                    if (!response.ok) throw new Error('Erreur API');
                 }
                 
-                showMessage('success', '✅ Signalement enregistré avec succès !');
+                showPopupMessage('success', '✓ Signalement créé !');
                 
-                // Réinitialiser le formulaire
-                document.getElementById('route').value = '';
-                document.getElementById('commune').value = '';
-                document.getElementById('description').value = '';
-                document.getElementById('typeCoupure').value = 'Totale';
-                document.getElementById('priorite').value = 'Moyenne';
-                document.querySelectorAll('.checkbox-group input[type="checkbox"]').forEach(cb => {
-                    cb.checked = false;
-                });
-                
-                // Réinitialiser la recherche
-                document.getElementById('searchAddress').value = '';
-                document.getElementById('searchResults').style.display = 'none';
-                document.getElementById('precisionInput').value = '';
-                document.getElementById('precisionBox').style.display = 'none';
-                document.getElementById('gpsCoords').innerHTML = '';
-                document.getElementById('gpsStatus').textContent = '📍 Localisation du problème';
-                document.getElementById('mapInstructions').textContent = '🔍 Recherchez une adresse ou route';
-                document.getElementById('mapInstructions').classList.remove('active');
-                document.getElementById('gpsBox').classList.remove('active');
-                position = null;
-                selectedResult = null;
-                
-                // Masquer le message après 3 secondes
                 setTimeout(() => {
-                    document.getElementById('messageBox').style.display = 'none';
-                }, 3000);
+                    map.closePopup();
+                    if (tempMarker) {
+                        map.removeLayer(tempMarker);
+                        tempMarker = null;
+                    }
+                }, 1500);
                 
             } catch (error) {
-                console.error('Erreur complète:', error);
-                showMessage('error', 'Erreur lors de l\'enregistrement: ' + (error.message || JSON.stringify(error)));
-            } finally {
-                button.disabled = false;
-                button.innerHTML = '📤 Envoyer le signalement';
+                console.error('Erreur:', error);
+                showPopupMessage('error', 'Erreur lors de la création: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = '✓ Créer le signalement';
             }
+        };
+        
+        window.cancelSignalement = function() {
+            map.closePopup();
+            if (tempMarker) {
+                map.removeLayer(tempMarker);
+                tempMarker = null;
+            }
+        };
+        
+        function showPopupMessage(type, text) {
+            const msgDiv = document.getElementById('message');
+            msgDiv.className = type === 'success' ? 'success-message' : 'error-message';
+            msgDiv.textContent = text;
+            msgDiv.style.display = 'block';
         }
         
-        function showMessage(type, text) {
-            const messageBox = document.getElementById('messageBox');
-            messageBox.className = `message ${type}`;
-            messageBox.textContent = text;
-            messageBox.style.display = 'block';
-        }
+        // Initialiser
+        setTimeout(initMap, 1000);
     </script>
 </body>
 </html>
