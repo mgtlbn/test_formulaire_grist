@@ -216,6 +216,7 @@
         let gristAPI = null;
         let isInGrist = false;
         let existingMarkers = [];
+        let existingLines = []; // Pour stocker les lignes de tronçons
         
         // Variables pour le mode tronçon
         let tronconMode = false;
@@ -294,6 +295,8 @@
                             Agent: tableData.Agent[index],
                             Latitude: tableData.Latitude[index],
                             Longitude: tableData.Longitude[index],
+                            Latitude_fin: tableData.Latitude_fin ? tableData.Latitude_fin[index] : null,
+                            Longitude_fin: tableData.Longitude_fin ? tableData.Longitude_fin[index] : null,
                             Route: tableData.Route[index],
                             Commune: tableData.Commune[index],
                             Type_coupure: tableData.Type_coupure[index],
@@ -325,9 +328,11 @@
         }
         
         function displayExistingMarkers(records) {
-            // Supprimer les anciens marqueurs
+            // Supprimer les anciens marqueurs et lignes
             existingMarkers.forEach(marker => map.removeLayer(marker));
             existingMarkers = [];
+            existingLines.forEach(line => map.removeLayer(line));
+            existingLines = [];
             
             // Ajouter les nouveaux
             records.forEach(record => {
@@ -337,25 +342,9 @@
                 if (!fields.Latitude || !fields.Longitude) return;
                 
                 const color = PRIORITY_COLORS[fields.Priorite] || '#6c757d';
-                
-                // Créer l'icône colorée
-                const icon = L.divIcon({
-                    className: 'existing-marker',
-                    html: `<div style="
-                        background: ${color};
-                        width: 24px;
-                        height: 24px;
-                        border-radius: 50%;
-                        border: 3px solid white;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-                        ${fields.Statut === 'Resolu' ? 'opacity: 0.5;' : ''}
-                    "></div>`,
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12]
-                });
+                const causes = Array.isArray(fields.Cause) ? fields.Cause.join(', ') : fields.Cause;
                 
                 // Créer le popup
-                const causes = Array.isArray(fields.Cause) ? fields.Cause.join(', ') : fields.Cause;
                 const popupContent = `
                     <div style="min-width: 200px;">
                         <h3 style="margin: 0 0 10px 0; color: #333; font-size: 15px;">
@@ -383,12 +372,64 @@
                     </div>
                 `;
                 
-                // Créer et ajouter le marqueur
-                const marker = L.marker([fields.Latitude, fields.Longitude], { icon: icon })
-                    .bindPopup(popupContent)
-                    .addTo(map);
+                // Vérifier si c'est un tronçon (avec coordonnées de fin)
+                const isTroncon = fields.Latitude_fin && fields.Longitude_fin;
                 
-                existingMarkers.push(marker);
+                if (isTroncon) {
+                    // C'est un tronçon - Afficher une ligne
+                    const line = L.polyline(
+                        [[fields.Latitude, fields.Longitude], [fields.Latitude_fin, fields.Longitude_fin]], 
+                        {
+                            color: color,
+                            weight: 6,
+                            opacity: fields.Statut === 'Resolu' ? 0.4 : 0.8
+                        }
+                    ).bindPopup(popupContent).addTo(map);
+                    
+                    existingLines.push(line);
+                    
+                    // Ajouter aussi des marqueurs aux extrémités
+                    const startIcon = L.circleMarker([fields.Latitude, fields.Longitude], {
+                        radius: 6,
+                        fillColor: color,
+                        color: 'white',
+                        weight: 2,
+                        fillOpacity: fields.Statut === 'Resolu' ? 0.4 : 1
+                    }).addTo(map);
+                    
+                    const endIcon = L.circleMarker([fields.Latitude_fin, fields.Longitude_fin], {
+                        radius: 6,
+                        fillColor: color,
+                        color: 'white',
+                        weight: 2,
+                        fillOpacity: fields.Statut === 'Resolu' ? 0.4 : 1
+                    }).addTo(map);
+                    
+                    existingMarkers.push(startIcon, endIcon);
+                    
+                } else {
+                    // C'est un point simple - Afficher un marqueur
+                    const icon = L.divIcon({
+                        className: 'existing-marker',
+                        html: `<div style="
+                            background: ${color};
+                            width: 24px;
+                            height: 24px;
+                            border-radius: 50%;
+                            border: 3px solid white;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                            ${fields.Statut === 'Resolu' ? 'opacity: 0.5;' : ''}
+                        "></div>`,
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    });
+                    
+                    const marker = L.marker([fields.Latitude, fields.Longitude], { icon: icon })
+                        .bindPopup(popupContent)
+                        .addTo(map);
+                    
+                    existingMarkers.push(marker);
+                }
             });
         }
         
@@ -628,7 +669,7 @@
                         <textarea id="description" rows="3" placeholder="Détails..."></textarea>
                     </div>
                     
-                    <button class="btn-submit" onclick="submitSignalement({lat: ${startPoint.lat}, lng: ${startPoint.lng}}, {lat: ${endPoint.lat}, lng: ${endPoint.lng}}, ${distance})">
+                    <button class="btn-submit" onclick="submitSignalement(${startPoint.lat}, ${startPoint.lng}, ${endPoint.lat}, ${endPoint.lng}, ${distance})">
                         ✓ Créer le signalement
                     </button>
                     
@@ -648,13 +689,16 @@
             .openOn(map);
         }
         
-        window.submitSignalement = async function(lat, lng) {
+        window.submitSignalement = async function(startLat, startLng, endLat, endLng, distance) {
             const agent = document.getElementById('agent').value.trim();
             const route = document.getElementById('route').value.trim();
             const commune = document.getElementById('commune').value.trim();
             const typeCoupure = document.getElementById('typeCoupure').value;
             const priorite = document.getElementById('priorite').value;
-            const description = document.getElementById('description').value.trim();
+            let description = document.getElementById('description').value.trim();
+            
+            // Ajouter la longueur du tronçon à la description
+            description = `Tronçon de ${distance}m${description ? ' - ' + description : ''}`;
             
             const causes = [];
             for (let i = 1; i <= 6; i++) {
@@ -687,8 +731,10 @@
                     const record = {
                         Date_heure: new Date().toISOString(),
                         Agent: agent,
-                        Latitude: lat,
-                        Longitude: lng,
+                        Latitude: startLat,
+                        Longitude: startLng,
+                        Latitude_fin: endLat,
+                        Longitude_fin: endLng,
                         Route: route,
                         Commune: commune,
                         Type_coupure: typeCoupure,
@@ -709,8 +755,10 @@
                     const record = {
                         Date_heure: new Date().toISOString(),
                         Agent: agent,
-                        Latitude: lat,
-                        Longitude: lng,
+                        Latitude: startLat,
+                        Longitude: startLng,
+                        Latitude_fin: endLat,
+                        Longitude_fin: endLng,
                         Route: route,
                         Commune: commune,
                         Type_coupure: typeCoupure,
@@ -757,10 +805,26 @@
         
         window.cancelSignalement = function() {
             map.closePopup();
-            if (tempMarker) {
-                map.removeLayer(tempMarker);
-                tempMarker = null;
+            
+            // Supprimer les marqueurs et la ligne temporaires
+            if (startMarker) {
+                map.removeLayer(startMarker);
+                startMarker = null;
             }
+            if (endMarker) {
+                map.removeLayer(endMarker);
+                endMarker = null;
+            }
+            if (tronconLine) {
+                map.removeLayer(tronconLine);
+                tronconLine = null;
+            }
+            
+            // Réinitialiser le mode
+            tronconMode = false;
+            startPoint = null;
+            document.getElementById('banner').textContent = '🔵 Cliquez pour marquer le DÉBUT du tronçon coupé';
+            document.getElementById('banner').classList.remove('step2');
         };
         
         function showPopupMessage(type, text) {
