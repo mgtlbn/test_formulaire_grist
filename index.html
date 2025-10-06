@@ -285,7 +285,29 @@
                 console.log('Grist API chargée !');
             });
         } else {
-            console.log('Mode: Standalone');
+            // Mode standalone - mais on charge quand même le script Grist
+            console.log('Mode: Standalone - Attente chargement Grist API...');
+            
+            // Vérifier périodiquement si Grist est chargé
+            const checkGrist = setInterval(() => {
+                if (typeof grist !== 'undefined') {
+                    clearInterval(checkGrist);
+                    isInGrist = true;
+                    console.log('Grist API chargée en différé !');
+                    grist.ready({ requiredAccess: 'full' });
+                    grist.onOptions(function(options) {
+                        gristAPI = grist;
+                    });
+                }
+            }, 200);
+            
+            // Timeout après 3 secondes
+            setTimeout(() => {
+                clearInterval(checkGrist);
+                if (!isInGrist) {
+                    console.log('Mode: Vraiment standalone (API REST)');
+                }
+            }, 3000);
         }
         
         // Initialiser la carte
