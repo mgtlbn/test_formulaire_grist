@@ -92,31 +92,31 @@
         .popup-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 15px;
-            margin: -20px -20px 15px -20px;
+            padding: 12px;
+            margin: -15px -15px 12px -15px;
             border-radius: 12px 12px 0 0;
         }
         
         .popup-header h3 {
             margin: 0;
-            font-size: 16px;
+            font-size: 14px;
         }
         
         .popup-coords {
-            font-size: 11px;
+            font-size: 10px;
             opacity: 0.9;
-            margin-top: 5px;
+            margin-top: 4px;
         }
         
         .form-group {
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
         
         .form-group label {
             display: block;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             color: #333;
         }
         
@@ -124,10 +124,10 @@
         .form-group select,
         .form-group textarea {
             width: 100%;
-            padding: 8px;
+            padding: 6px;
             border: 2px solid #e0e0e0;
             border-radius: 6px;
-            font-size: 13px;
+            font-size: 12px;
             font-family: inherit;
         }
         
@@ -141,36 +141,37 @@
         .checkbox-group {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            gap: 6px;
         }
         
         .checkbox-item {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
         }
         
         .checkbox-item input {
             width: auto;
+            margin: 0;
         }
         
         .checkbox-item label {
             margin: 0;
             font-weight: 400;
-            font-size: 12px;
+            font-size: 11px;
         }
         
         .btn-submit {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
             color: white;
             border: none;
             border-radius: 8px;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
-            margin-top: 10px;
+            margin-top: 8px;
         }
         
         .btn-submit:hover {
@@ -184,15 +185,15 @@
         
         .btn-cancel {
             width: 100%;
-            padding: 10px;
+            padding: 8px;
             background: #6c757d;
             color: white;
             border: none;
             border-radius: 8px;
             font-weight: 600;
-            font-size: 13px;
+            font-size: 12px;
             cursor: pointer;
-            margin-top: 8px;
+            margin-top: 6px;
         }
         
         .success-message {
@@ -244,10 +245,6 @@
     <div id="banner" class="instruction-banner">
         🔵 Cliquez pour marquer le DÉBUT du tronçon coupé
     </div>
-    
-    <button id="geolocateBtn" class="geolocate-btn" title="Me localiser">
-        📍
-    </button>
     
     <div id="map"></div>
 
@@ -319,77 +316,6 @@
             
             // Auto-refresh toutes les 30 secondes
             setInterval(loadExistingSignalements, 30000);
-        }
-        
-        // Géolocalisation
-        document.getElementById('geolocateBtn').addEventListener('click', geolocateUser);
-        
-        let userMarker = null;
-        
-        function geolocateUser() {
-            const btn = document.getElementById('geolocateBtn');
-            
-            if (!navigator.geolocation) {
-                alert('La géolocalisation n\'est pas supportée par votre navigateur');
-                return;
-            }
-            
-            btn.classList.add('loading');
-            btn.textContent = '⏳';
-            
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    
-                    // Centrer la carte sur la position
-                    map.setView([lat, lng], 16);
-                    
-                    // Ajouter/mettre à jour le marqueur de position
-                    if (userMarker) {
-                        map.removeLayer(userMarker);
-                    }
-                    
-                    userMarker = L.circleMarker([lat, lng], {
-                        radius: 10,
-                        fillColor: '#007bff',
-                        color: 'white',
-                        weight: 3,
-                        fillOpacity: 0.8
-                    }).addTo(map);
-                    
-                    // Animation de pulsation
-                    const pulse = L.circle([lat, lng], {
-                        radius: position.coords.accuracy,
-                        fillColor: '#007bff',
-                        fillOpacity: 0.1,
-                        color: '#007bff',
-                        weight: 1
-                    }).addTo(map);
-                    
-                    setTimeout(() => map.removeLayer(pulse), 2000);
-                    
-                    btn.classList.remove('loading');
-                    btn.classList.add('active');
-                    btn.textContent = '✓';
-                    
-                    setTimeout(() => {
-                        btn.classList.remove('active');
-                        btn.textContent = '📍';
-                    }, 2000);
-                },
-                (error) => {
-                    console.error('Erreur géolocalisation:', error);
-                    alert('Impossible de récupérer votre position. Vérifiez les autorisations.');
-                    btn.classList.remove('loading');
-                    btn.textContent = '📍';
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
-                }
-            );
         }
         
         async function loadExistingSignalements() {
@@ -505,7 +431,13 @@
                             weight: 6,
                             opacity: fields.Statut === 'Resolu' ? 0.4 : 0.8
                         }
-                    ).bindPopup(popupContent).addTo(map);
+                    )
+                    .bindPopup(popupContent)
+                    .bindTooltip(`${fields.Route} - ${fields.Priorite}`, {
+                        permanent: false,
+                        direction: 'center'
+                    })
+                    .addTo(map);
                     
                     existingLines.push(line);
                     
@@ -803,7 +735,10 @@
             // Créer un popup au milieu du tronçon
             const popup = L.popup({
                 maxWidth: 350,
-                closeButton: false
+                maxHeight: window.innerHeight * 0.8,
+                closeButton: false,
+                autoPan: true,
+                keepInView: true
             })
             .setLatLng([midLat, midLng])
             .setContent(popupContent)
