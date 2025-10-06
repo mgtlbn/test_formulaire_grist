@@ -351,6 +351,79 @@
             setInterval(loadExistingSignalements, 30000);
         }
         
+        // Géolocalisation
+        document.getElementById('geolocateBtn').addEventListener('click', geolocateUser);
+        
+        let userMarker = null;
+        
+        function geolocateUser() {
+            const btn = document.getElementById('geolocateBtn');
+            
+            if (!navigator.geolocation) {
+                alert('La géolocalisation n\'est pas supportée par votre navigateur');
+                return;
+            }
+            
+            btn.classList.add('loading');
+            btn.textContent = '⏳';
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    // Centrer la carte sur la position
+                    map.setView([lat, lng], 16);
+                    
+                    // Ajouter/mettre à jour le marqueur de position
+                    if (userMarker) {
+                        map.removeLayer(userMarker);
+                    }
+                    
+                    userMarker = L.circleMarker([lat, lng], {
+                        radius: 10,
+                        fillColor: '#007bff',
+                        color: 'white',
+                        weight: 3,
+                        fillOpacity: 0.8,
+                        interactive: false
+                    }).addTo(map);
+                    
+                    // Animation de pulsation
+                    const pulse = L.circle([lat, lng], {
+                        radius: position.coords.accuracy,
+                        fillColor: '#007bff',
+                        fillOpacity: 0.1,
+                        color: '#007bff',
+                        weight: 1,
+                        interactive: false
+                    }).addTo(map);
+                    
+                    setTimeout(() => map.removeLayer(pulse), 2000);
+                    
+                    btn.classList.remove('loading');
+                    btn.classList.add('active');
+                    btn.textContent = '✓';
+                    
+                    setTimeout(() => {
+                        btn.classList.remove('active');
+                        btn.textContent = '📍';
+                    }, 2000);
+                },
+                (error) => {
+                    console.error('Erreur géolocalisation:', error);
+                    alert('Impossible de récupérer votre position. Vérifiez les autorisations.');
+                    btn.classList.remove('loading');
+                    btn.textContent = '📍';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+        
         async function loadExistingSignalements() {
             try {
                 console.log('Chargement des signalements existants...');
