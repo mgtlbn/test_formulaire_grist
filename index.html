@@ -256,9 +256,8 @@
         let map;
         let tempMarker = null;
         let gristAPI = null;
-        let isInGrist = false;
         let existingMarkers = [];
-        let existingLines = []; // Pour stocker les lignes de tronçons
+        let existingLines = [];
         
         // Variables pour le mode tronçon
         let tronconMode = false;
@@ -267,11 +266,6 @@
         let endMarker = null;
         let tronconLine = null;
         
-        const GRIST_CONFIG = {
-            apiUrl: 'https://grist.numerique.gouv.fr/api/docs/g2HLa3eYrAStdHNxgpmBPr/tables/Signalements/records',
-            apiKey: 'c6ba01a7d00347cd2ab2f051df5d6acab380afbf'
-        };
-        
         const PRIORITY_COLORS = {
             'Critique': '#dc3545',
             'Haute': '#fd7e14',
@@ -279,44 +273,17 @@
             'Basse': '#28a745'
         };
         
-        // Détecter si on est dans Grist
-        if (typeof grist !== 'undefined') {
-            isInGrist = true;
-            console.log('Mode: Widget Grist');
-            grist.ready({ requiredAccess: 'full' });
-            grist.onOptions(function(options) {
-                gristAPI = grist;
-                console.log('Grist API chargée !');
-            });
-        } else {
-            // Mode standalone - mais on charge quand même le script Grist
-            console.log('Mode: Standalone - Attente chargement Grist API...');
-            
-            // Vérifier périodiquement si Grist est chargé
-            const checkGrist = setInterval(() => {
-                if (typeof grist !== 'undefined') {
-                    clearInterval(checkGrist);
-                    isInGrist = true;
-                    console.log('Grist API chargée en différé !');
-                    grist.ready({ requiredAccess: 'full' });
-                    grist.onOptions(function(options) {
-                        gristAPI = grist;
-                    });
-                }
-            }, 200);
-            
-            // Timeout après 3 secondes
-            setTimeout(() => {
-                clearInterval(checkGrist);
-                if (!isInGrist) {
-                    console.log('Mode: Vraiment standalone (API REST)');
-                }
-            }, 3000);
-        }
+        // ✅ INITIALISATION SÉCURISÉE - Uniquement via Widget API
+        console.log('Initialisation Widget Grist...');
+        grist.ready({ requiredAccess: 'full' });
+        
+        grist.onOptions(function(options) {
+            gristAPI = grist;
+            console.log('✅ Grist API chargée et prête !');
+        });
         
         // Initialiser la carte
         function initMap() {
-            // Vérifier que Leaflet est chargé
             if (typeof L === 'undefined') {
                 console.log('Leaflet pas chargé, réessai...');
                 setTimeout(initMap, 300);
@@ -335,19 +302,13 @@
                 maxZoom: 18
             }).addTo(map);
             
-            // Désactiver le locate control automatique
             map.off('locationfound');
             map.off('locationerror');
-            
-            // Clic sur la carte
             map.on('click', onMapClick);
             
             console.log('Carte prête !');
             
-            // Charger les signalements existants
             loadExistingSignalements();
-            
-            // Auto-refresh toutes les 30 secondes
             setInterval(loadExistingSignalements, 30000);
         }
         
@@ -372,10 +333,8 @@
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
                     
-                    // Centrer la carte sur la position
                     map.setView([lat, lng], 16);
                     
-                    // Ajouter/mettre à jour le marqueur de position
                     if (userMarker) {
                         map.removeLayer(userMarker);
                     }
@@ -389,7 +348,6 @@
                         interactive: false
                     }).addTo(map);
                     
-                    // Animation de pulsation
                     const pulse = L.circle([lat, lng], {
                         radius: position.coords.accuracy,
                         fillColor: '#007bff',
@@ -424,68 +382,55 @@
             );
         }
         
+        // ✅ CHARGEMENT SÉCURISÉ - Uniquement via Widget API
         async function loadExistingSignalements() {
             try {
-                console.log('Chargement des signalements existants...');
+                console.log('Chargement des signalements...');
                 
-                let records = [];
-                
-                if (isInGrist && gristAPI) {
-                    // Récupérer via API Grist Widget
-                    const tableData = await gristAPI.docApi.fetchTable('Signalements');
-                    console.log('Colonnes récupérées:', Object.keys(tableData));
-                    console.log('Exemple Latitude_fin:', tableData.Latitude_fin);
-                    
-                    records = tableData.id.map((id, index) => ({
-                        id: id,
-                        fields: {
-                            Agent: tableData.Agent[index],
-                            Latitude: tableData.Latitude[index],
-                            Longitude: tableData.Longitude[index],
-                            Latitude_fin: tableData.Latitude_fin ? tableData.Latitude_fin[index] : null,
-                            Longitude_fin: tableData.Longitude_fin ? tableData.Longitude_fin[index] : null,
-                            Route: tableData.Route[index],
-                            Commune: tableData.Commune[index],
-                            Type_coupure: tableData.Type_coupure[index],
-                            Cause: tableData.Cause[index],
-                            Priorite: tableData.Priorite[index],
-                            Statut: tableData.Statut[index],
-                            Description: tableData.Description[index],
-                            Date_heure: tableData.Date_heure[index]
-                        }
-                    }));
-                } else {
-                    // Récupérer via API REST
-                    const response = await fetch(GRIST_CONFIG.apiUrl, {
-                        headers: {
-                            'Authorization': `Bearer ${GRIST_CONFIG.apiKey}`
-                        }
-                    });
-                    const data = await response.json();
-                    records = data.records;
+                if (!gristAPI) {
+                    console.warn('API Grist pas encore prête, réessai dans 1s...');
+                    setTimeout(loadExistingSignalements, 1000);
+                    return;
                 }
                 
-                console.log(`${records.length} signalement(s) trouvé(s)`);
+                const tableData = await gristAPI.docApi.fetchTable('Signalements');
+                console.log('✅ Données chargées:', tableData.id.length, 'signalement(s)');
+                
+                const records = tableData.id.map((id, index) => ({
+                    id: id,
+                    fields: {
+                        Agent: tableData.Agent[index],
+                        Latitude: tableData.Latitude[index],
+                        Longitude: tableData.Longitude[index],
+                        Latitude_fin: tableData.Latitude_fin ? tableData.Latitude_fin[index] : null,
+                        Longitude_fin: tableData.Longitude_fin ? tableData.Longitude_fin[index] : null,
+                        Route: tableData.Route[index],
+                        Commune: tableData.Commune[index],
+                        Type_coupure: tableData.Type_coupure[index],
+                        Cause: tableData.Cause[index],
+                        Priorite: tableData.Priorite[index],
+                        Statut: tableData.Statut[index],
+                        Description: tableData.Description[index],
+                        Date_heure: tableData.Date_heure[index]
+                    }
+                }));
                 
                 displayExistingMarkers(records);
                 
             } catch (error) {
-                console.error('Erreur chargement signalements:', error);
+                console.error('❌ Erreur chargement signalements:', error);
             }
         }
         
         function displayExistingMarkers(records) {
-            // Supprimer les anciens marqueurs et lignes
             existingMarkers.forEach(marker => map.removeLayer(marker));
             existingMarkers = [];
             existingLines.forEach(line => map.removeLayer(line));
             existingLines = [];
             
-            // Ajouter les nouveaux
             records.forEach(record => {
                 const fields = record.fields;
                 
-                // Vérifier que les coordonnées existent ET sont des nombres
                 if (!fields.Latitude || !fields.Longitude) return;
                 if (typeof fields.Latitude !== 'number' || typeof fields.Longitude !== 'number') {
                     console.warn('Coordonnées invalides ignorées:', fields.Latitude, fields.Longitude);
@@ -495,7 +440,6 @@
                 const color = PRIORITY_COLORS[fields.Priorite] || '#6c757d';
                 const causes = Array.isArray(fields.Cause) ? fields.Cause.join(', ') : fields.Cause;
                 
-                // Créer le popup
                 const popupContent = `
                     <div style="min-width: 200px;">
                         <h3 style="margin: 0 0 10px 0; color: #333; font-size: 15px;">
@@ -517,21 +461,17 @@
                             </p>
                             ${fields.Description ? `<p style="margin: 5px 0;"><strong>Description:</strong><br>${fields.Description}</p>` : ''}
                             <p style="margin: 5px 0; font-size: 11px; color: #999;">
-                                    ${new Date(
-  fields.Date_heure < 1e12 ? fields.Date_heure * 1000 : fields.Date_heure
-).toLocaleString('fr-FR')}
+                                ${new Date(fields.Date_heure < 1e12 ? fields.Date_heure * 1000 : fields.Date_heure).toLocaleString('fr-FR')}
                             </p>
                         </div>
                     </div>
                 `;
                 
-                // Vérifier si c'est un tronçon (avec coordonnées de fin valides)
                 const isTroncon = fields.Latitude_fin && fields.Longitude_fin && 
                                   typeof fields.Latitude_fin === 'number' && 
                                   typeof fields.Longitude_fin === 'number';
                 
                 if (isTroncon) {
-                    // C'est un tronçon - Afficher une ligne
                     const line = L.polyline(
                         [[fields.Latitude, fields.Longitude], [fields.Latitude_fin, fields.Longitude_fin]], 
                         {
@@ -549,7 +489,6 @@
                     
                     existingLines.push(line);
                     
-                    // Ajouter des marqueurs cliquables aux extrémités avec popup
                     const startIcon = L.circleMarker([fields.Latitude, fields.Longitude], {
                         radius: 6,
                         fillColor: color,
@@ -575,7 +514,6 @@
                     existingMarkers.push(startIcon, endIcon);
                     
                 } else {
-                    // C'est un point simple - Afficher un marqueur
                     const icon = L.divIcon({
                         className: 'existing-marker',
                         html: `<div style="
@@ -605,11 +543,9 @@
             const lng = e.latlng.lng;
             
             if (!tronconMode) {
-                // Premier clic - Début du tronçon
                 startPoint = { lat: lat, lng: lng };
                 tronconMode = true;
                 
-                // Marqueur début (bleu)
                 if (startMarker) map.removeLayer(startMarker);
                 startMarker = L.circleMarker([lat, lng], {
                     radius: 8,
@@ -619,15 +555,12 @@
                     fillOpacity: 1
                 }).addTo(map);
                 
-                // Changer l'instruction
                 document.getElementById('banner').textContent = '🔴 Cliquez pour marquer la FIN du tronçon coupé';
                 document.getElementById('banner').classList.add('step2');
                 
             } else {
-                // Deuxième clic - Fin du tronçon
                 const endPoint = { lat: lat, lng: lng };
                 
-                // Marqueur fin (rouge)
                 if (endMarker) map.removeLayer(endMarker);
                 endMarker = L.circleMarker([lat, lng], {
                     radius: 8,
@@ -637,7 +570,6 @@
                     fillOpacity: 1
                 }).addTo(map);
                 
-                // Tracer la ligne
                 if (tronconLine) map.removeLayer(tronconLine);
                 tronconLine = L.polyline(
                     [[startPoint.lat, startPoint.lng], [endPoint.lat, endPoint.lng]], 
@@ -648,19 +580,15 @@
                     }
                 ).addTo(map);
                 
-                // Calculer la distance
                 const distance = calculateDistance(startPoint.lat, startPoint.lng, lat, lng);
                 
-                // Récupérer les infos de la route (au point du milieu pour plus de précision)
                 const midLat = (startPoint.lat + lat) / 2;
                 const midLng = (startPoint.lng + lng) / 2;
                 
                 const adresseInfo = await getRouteInfo(midLat, midLng);
                 
-                // Ouvrir le formulaire
                 showFormPopup(startPoint, endPoint, distance, adresseInfo);
                 
-                // Réinitialiser le mode
                 document.getElementById('banner').textContent = '🔵 Cliquez pour marquer le DÉBUT du tronçon coupé';
                 document.getElementById('banner').classList.remove('step2');
                 tronconMode = false;
@@ -668,76 +596,67 @@
         }
         
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Rayon de la Terre en km
+            const R = 6371;
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
                       Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
                       Math.sin(dLon/2) * Math.sin(dLon/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return (R * c * 1000).toFixed(0); // Distance en mètres
+            return (R * c * 1000).toFixed(0);
         }
         
-async function getRouteInfo(lat, lng) {
-  let routeInfo = { route: '', commune: '' };
+        async function getRouteInfo(lat, lng) {
+            let routeInfo = { route: '', commune: '' };
 
-  try {
-    // 1️⃣ Nominatim : plus précis que data.gouv pour les routes
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&extratags=1`,
-      {
-        headers: {
-          "User-Agent": "Widget-Grist-Routes/1.0"
+            try {
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&extratags=1`,
+                    {
+                        headers: {
+                            "User-Agent": "Widget-Grist-Routes/1.0"
+                        }
+                    }
+                );
+
+                const data = await response.json();
+
+                if (data.address) {
+                    routeInfo.commune = data.address.city || data.address.town || data.address.village || "";
+                    routeInfo.route = data.address.road || "";
+                }
+
+                if (data.extratags && data.extratags.ref) {
+                    routeInfo.route = data.extratags.ref;
+                }
+
+                if (!routeInfo.route) {
+                    const overpassQuery = `
+                        [out:json];
+                        way(around:50,${lat},${lng})["highway"]["ref"];
+                        out tags;
+                    `;
+                    const response2 = await fetch("https://overpass-api.de/api/interpreter", {
+                        method: "POST",
+                        body: overpassQuery
+                    });
+                    const data2 = await response2.json();
+
+                    if (data2.elements && data2.elements.length > 0) {
+                        const road = data2.elements[0];
+                        if (road.tags && road.tags.ref) {
+                            routeInfo.route = road.tags.ref;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Erreur récupération route:", error);
+            }
+
+            return routeInfo;
         }
-      }
-    );
-
-    const data = await response.json();
-
-    if (data.address) {
-      routeInfo.commune =
-        data.address.city ||
-        data.address.town ||
-        data.address.village ||
-        "";
-      routeInfo.route = data.address.road || "";
-    }
-
-    // Si une référence route (ex : N24, D137) est présente
-    if (data.extratags && data.extratags.ref) {
-      routeInfo.route = data.extratags.ref;
-    }
-
-    // 2️⃣ Si toujours rien trouvé, petit secours via Overpass (dans un rayon de 50 m)
-    if (!routeInfo.route) {
-      const overpassQuery = `
-        [out:json];
-        way(around:50,${lat},${lng})["highway"]["ref"];
-        out tags;
-      `;
-      const response2 = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        body: overpassQuery
-      });
-      const data2 = await response2.json();
-
-      if (data2.elements && data2.elements.length > 0) {
-        const road = data2.elements[0];
-        if (road.tags && road.tags.ref) {
-          routeInfo.route = road.tags.ref;
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Erreur récupération route:", error);
-  }
-
-  return routeInfo;
-}
-
         
         function showFormPopup(startPoint, endPoint, distance, adresseInfo) {
-            // Calculer le point du milieu pour afficher le popup
             const midLat = (startPoint.lat + endPoint.lat) / 2;
             const midLng = (startPoint.lng + endPoint.lng) / 2;
             const popupContent = `
@@ -832,7 +751,6 @@ async function getRouteInfo(lat, lng) {
                 </div>
             `;
             
-            // Créer un popup au milieu du tronçon
             const popup = L.popup({
                 maxWidth: 350,
                 maxHeight: window.innerHeight * 0.8,
@@ -845,8 +763,9 @@ async function getRouteInfo(lat, lng) {
             .openOn(map);
         }
         
+        // ✅ ENVOI SÉCURISÉ - Uniquement via Widget API
         window.submitSignalement = async function(startLat, startLng, endLat, endLng, distance) {
-            console.log('submitSignalement appelé avec:', { startLat, startLng, endLat, endLng, distance });
+            console.log('📤 Envoi signalement...');
             
             const agent = document.getElementById('agent').value.trim();
             const route = document.getElementById('route').value.trim();
@@ -855,7 +774,6 @@ async function getRouteInfo(lat, lng) {
             const priorite = document.getElementById('priorite').value;
             let description = document.getElementById('description').value.trim();
             
-            // Ajouter la longueur du tronçon à la description
             description = `Tronçon de ${distance}m${description ? ' - ' + description : ''}`;
             
             const causes = [];
@@ -864,7 +782,6 @@ async function getRouteInfo(lat, lng) {
                 if (cb && cb.checked) causes.push(cb.value);
             }
             
-            // Validation
             if (!agent || !route || !commune) {
                 showPopupMessage('error', 'Veuillez remplir tous les champs obligatoires');
                 return;
@@ -875,74 +792,40 @@ async function getRouteInfo(lat, lng) {
                 return;
             }
             
-            // Désactiver le bouton
             const btn = document.querySelector('.btn-submit');
             btn.disabled = true;
             btn.innerHTML = '<div class="spinner"></div>Envoi...';
             
             try {
-                console.log('Envoi signalement. Mode Grist:', isInGrist, 'API disponible:', !!gristAPI);
-                
-                if (isInGrist && gristAPI) {
-                    // Mode Grist Widget
-                    console.log('Utilisation API Widget Grist');
-                    const record = {
-                        Date_heure: new Date().toISOString(),
-                        Agent: agent,
-                        Latitude: startLat,
-                        Longitude: startLng,
-                        Latitude_fin: endLat,
-                        Longitude_fin: endLng,
-                        Route: route,
-                        Commune: commune,
-                        Type_coupure: typeCoupure,
-                        Cause: ['L', ...causes],
-                        Description: description,
-                        Statut: 'Actif',
-                        Priorite: priorite
-                    };
-                    
-                    console.log('Record à envoyer:', record);
-                    
-                    await gristAPI.docApi.applyUserActions([
-                        ['AddRecord', 'Signalements', null, record]
-                    ]);
-                    
-                    console.log('Signalement créé via Widget API');
-                } else {
-                    // Mode Standalone
-                    console.log('Utilisation API REST (standalone)');
-                    const record = {
-                        Date_heure: new Date().toISOString(),
-                        Agent: agent,
-                        Latitude: startLat,
-                        Longitude: startLng,
-                        Latitude_fin: endLat,
-                        Longitude_fin: endLng,
-                        Route: route,
-                        Commune: commune,
-                        Type_coupure: typeCoupure,
-                        Cause: causes,
-                        Description: description,
-                        Statut: 'Actif',
-                        Priorite: priorite
-                    };
-                    
-                    const response = await fetch(GRIST_CONFIG.apiUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${GRIST_CONFIG.apiKey}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ records: [{ fields: record }] })
-                    });
-                    
-                    if (!response.ok) throw new Error('Erreur API');
+                if (!gristAPI) {
+                    throw new Error('API Grist non disponible');
                 }
                 
+                const record = {
+                    Date_heure: new Date().toISOString(),
+                    Agent: agent,
+                    Latitude: startLat,
+                    Longitude: startLng,
+                    Latitude_fin: endLat,
+                    Longitude_fin: endLng,
+                    Route: route,
+                    Commune: commune,
+                    Type_coupure: typeCoupure,
+                    Cause: ['L', ...causes],
+                    Description: description,
+                    Statut: 'Actif',
+                    Priorite: priorite
+                };
+                
+                console.log('📝 Enregistrement:', record);
+                
+                await gristAPI.docApi.applyUserActions([
+                    ['AddRecord', 'Signalements', null, record]
+                ]);
+                
+                console.log('✅ Signalement créé !');
                 showPopupMessage('success', '✓ Signalement créé !');
                 
-                // Recharger les signalements pour afficher le nouveau
                 setTimeout(() => {
                     loadExistingSignalements();
                 }, 500);
@@ -956,7 +839,7 @@ async function getRouteInfo(lat, lng) {
                 }, 1500);
                 
             } catch (error) {
-                console.error('Erreur:', error);
+                console.error('❌ Erreur:', error);
                 showPopupMessage('error', 'Erreur lors de la création: ' + error.message);
                 btn.disabled = false;
                 btn.innerHTML = '✓ Créer le signalement';
@@ -966,7 +849,6 @@ async function getRouteInfo(lat, lng) {
         window.cancelSignalement = function() {
             map.closePopup();
             
-            // Supprimer les marqueurs et la ligne temporaires
             if (startMarker) {
                 map.removeLayer(startMarker);
                 startMarker = null;
@@ -980,7 +862,6 @@ async function getRouteInfo(lat, lng) {
                 tronconLine = null;
             }
             
-            // Réinitialiser le mode
             tronconMode = false;
             startPoint = null;
             document.getElementById('banner').textContent = '🔵 Cliquez pour marquer le DÉBUT du tronçon coupé';
@@ -994,7 +875,6 @@ async function getRouteInfo(lat, lng) {
             msgDiv.style.display = 'block';
         }
         
-        // Initialiser
         setTimeout(initMap, 1000);
     </script>
 </body>
