@@ -8,40 +8,494 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <style>
-        /* ... ton CSS inchangé ... */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        #map {
+            height: 100vh;
+            width: 100%;
+            cursor: crosshair;
+        }
+        
+        .instruction-banner {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            font-weight: 600;
+            font-size: 14px;
+            pointer-events: none;
+            transition: all 0.3s;
+        }
+        
+        .instruction-banner.step2 {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .geolocate-btn {
+            position: absolute;
+            bottom: 120px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid #ccc;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.3s;
+        }
+        
+        .geolocate-btn:hover {
+            background: #667eea;
+            border-color: #667eea;
+        }
+        
+        .geolocate-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .geolocate-btn.loading {
+            background: #ffc107;
+        }
+        
+        .geolocate-btn.active {
+            background: #28a745;
+            border-color: #28a745;
+        }
+        
+        .popup-form {
+            width: 320px;
+            padding: 0;
+        }
+        
+        .popup-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            margin: -15px -15px 12px -15px;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        .popup-header h3 {
+            margin: 0;
+            font-size: 14px;
+        }
+        
+        .popup-coords {
+            font-size: 10px;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+        
+        .form-group {
+            margin-bottom: 10px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 6px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: inherit;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .checkbox-item input {
+            width: auto;
+            margin: 0;
+        }
+        
+        .checkbox-item label {
+            margin: 0;
+            font-weight: 400;
+            font-size: 11px;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        
+        .btn-submit:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-cancel {
+            width: 100%;
+            padding: 8px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+        
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .leaflet-popup-content {
+            margin: 20px;
+        }
     </style>
 </head>
 <body>
     <div id="banner" class="instruction-banner">
         🔵 Cliquez pour marquer le DÉBUT du tronçon coupé
     </div>
-    <button id="geolocateBtn" class="geolocate-btn" title="Me localiser">📍</button>
+    
+    <button id="geolocateBtn" class="geolocate-btn" title="Me localiser">
+        📍
+    </button>
+    
     <div id="map"></div>
 
     <script>
-        // --- [code inchangé jusqu’à displayExistingMarkers()] ---
-
+        let map;
+        let tempMarker = null;
+        let gristAPI = null;
+        let isInGrist = false;
+        let existingMarkers = [];
+        let existingLines = []; // Pour stocker les lignes de tronçons
+        
+        // Variables pour le mode tronçon
+        let tronconMode = false;
+        let startPoint = null;
+        let startMarker = null;
+        let endMarker = null;
+        let tronconLine = null;
+        
+        const GRIST_CONFIG = {
+            apiUrl: 'https://grist.numerique.gouv.fr/api/docs/g2HLa3eYrAStdHNxgpmBPr/tables/Signalements/records',
+            apiKey: 'c6ba01a7d00347cd2ab2f051df5d6acab380afbf'
+        };
+        
+        const PRIORITY_COLORS = {
+            'Critique': '#dc3545',
+            'Haute': '#fd7e14',
+            'Moyenne': '#ffc107',
+            'Basse': '#28a745'
+        };
+        
+        // Détecter si on est dans Grist
+        if (typeof grist !== 'undefined') {
+            isInGrist = true;
+            console.log('Mode: Widget Grist');
+            grist.ready({ requiredAccess: 'full' });
+            grist.onOptions(function(options) {
+                gristAPI = grist;
+                console.log('Grist API chargée !');
+            });
+        } else {
+            // Mode standalone - mais on charge quand même le script Grist
+            console.log('Mode: Standalone - Attente chargement Grist API...');
+            
+            // Vérifier périodiquement si Grist est chargé
+            const checkGrist = setInterval(() => {
+                if (typeof grist !== 'undefined') {
+                    clearInterval(checkGrist);
+                    isInGrist = true;
+                    console.log('Grist API chargée en différé !');
+                    grist.ready({ requiredAccess: 'full' });
+                    grist.onOptions(function(options) {
+                        gristAPI = grist;
+                    });
+                }
+            }, 200);
+            
+            // Timeout après 3 secondes
+            setTimeout(() => {
+                clearInterval(checkGrist);
+                if (!isInGrist) {
+                    console.log('Mode: Vraiment standalone (API REST)');
+                }
+            }, 3000);
+        }
+        
+        // Initialiser la carte
+        function initMap() {
+            // Vérifier que Leaflet est chargé
+            if (typeof L === 'undefined') {
+                console.log('Leaflet pas chargé, réessai...');
+                setTimeout(initMap, 300);
+                return;
+            }
+            
+            console.log('Initialisation carte...');
+            
+            map = L.map('map', {
+                zoomControl: true,
+                attributionControl: true
+            }).setView([48.1173, -1.6778], 10);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 18
+            }).addTo(map);
+            
+            // Désactiver le locate control automatique
+            map.off('locationfound');
+            map.off('locationerror');
+            
+            // Clic sur la carte
+            map.on('click', onMapClick);
+            
+            console.log('Carte prête !');
+            
+            // Charger les signalements existants
+            loadExistingSignalements();
+            
+            // Auto-refresh toutes les 30 secondes
+            setInterval(loadExistingSignalements, 30000);
+        }
+        
+        // Géolocalisation
+        document.getElementById('geolocateBtn').addEventListener('click', geolocateUser);
+        
+        let userMarker = null;
+        
+        function geolocateUser() {
+            const btn = document.getElementById('geolocateBtn');
+            
+            if (!navigator.geolocation) {
+                alert('La géolocalisation n\'est pas supportée par votre navigateur');
+                return;
+            }
+            
+            btn.classList.add('loading');
+            btn.textContent = '⏳';
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    // Centrer la carte sur la position
+                    map.setView([lat, lng], 16);
+                    
+                    // Ajouter/mettre à jour le marqueur de position
+                    if (userMarker) {
+                        map.removeLayer(userMarker);
+                    }
+                    
+                    userMarker = L.circleMarker([lat, lng], {
+                        radius: 10,
+                        fillColor: '#007bff',
+                        color: 'white',
+                        weight: 3,
+                        fillOpacity: 0.8,
+                        interactive: false
+                    }).addTo(map);
+                    
+                    // Animation de pulsation
+                    const pulse = L.circle([lat, lng], {
+                        radius: position.coords.accuracy,
+                        fillColor: '#007bff',
+                        fillOpacity: 0.1,
+                        color: '#007bff',
+                        weight: 1,
+                        interactive: false
+                    }).addTo(map);
+                    
+                    setTimeout(() => map.removeLayer(pulse), 2000);
+                    
+                    btn.classList.remove('loading');
+                    btn.classList.add('active');
+                    btn.textContent = '✓';
+                    
+                    setTimeout(() => {
+                        btn.classList.remove('active');
+                        btn.textContent = '📍';
+                    }, 2000);
+                },
+                (error) => {
+                    console.error('Erreur géolocalisation:', error);
+                    alert('Impossible de récupérer votre position. Vérifiez les autorisations.');
+                    btn.classList.remove('loading');
+                    btn.textContent = '📍';
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+        
+        async function loadExistingSignalements() {
+            try {
+                console.log('Chargement des signalements existants...');
+                
+                let records = [];
+                
+                if (isInGrist && gristAPI) {
+                    // Récupérer via API Grist Widget
+                    const tableData = await gristAPI.docApi.fetchTable('Signalements');
+                    console.log('Colonnes récupérées:', Object.keys(tableData));
+                    console.log('Exemple Latitude_fin:', tableData.Latitude_fin);
+                    
+                    records = tableData.id.map((id, index) => ({
+                        id: id,
+                        fields: {
+                            Agent: tableData.Agent[index],
+                            Latitude: tableData.Latitude[index],
+                            Longitude: tableData.Longitude[index],
+                            Latitude_fin: tableData.Latitude_fin ? tableData.Latitude_fin[index] : null,
+                            Longitude_fin: tableData.Longitude_fin ? tableData.Longitude_fin[index] : null,
+                            Route: tableData.Route[index],
+                            Commune: tableData.Commune[index],
+                            Type_coupure: tableData.Type_coupure[index],
+                            Cause: tableData.Cause[index],
+                            Priorite: tableData.Priorite[index],
+                            Statut: tableData.Statut[index],
+                            Description: tableData.Description[index],
+                            Date_heure: tableData.Date_heure[index]
+                        }
+                    }));
+                } else {
+                    // Récupérer via API REST
+                    const response = await fetch(GRIST_CONFIG.apiUrl, {
+                        headers: {
+                            'Authorization': `Bearer ${GRIST_CONFIG.apiKey}`
+                        }
+                    });
+                    const data = await response.json();
+                    records = data.records;
+                }
+                
+                console.log(`${records.length} signalement(s) trouvé(s)`);
+                
+                displayExistingMarkers(records);
+                
+            } catch (error) {
+                console.error('Erreur chargement signalements:', error);
+            }
+        }
+        
         function displayExistingMarkers(records) {
+            // Supprimer les anciens marqueurs et lignes
             existingMarkers.forEach(marker => map.removeLayer(marker));
             existingMarkers = [];
             existingLines.forEach(line => map.removeLayer(line));
             existingLines = [];
-
+            
+            // Ajouter les nouveaux
             records.forEach(record => {
                 const fields = record.fields;
+                
+                // Vérifier que les coordonnées existent ET sont des nombres
                 if (!fields.Latitude || !fields.Longitude) return;
-                if (typeof fields.Latitude !== 'number' || typeof fields.Longitude !== 'number') return;
-
+                if (typeof fields.Latitude !== 'number' || typeof fields.Longitude !== 'number') {
+                    console.warn('Coordonnées invalides ignorées:', fields.Latitude, fields.Longitude);
+                    return;
+                }
+                
                 const color = PRIORITY_COLORS[fields.Priorite] || '#6c757d';
                 const causes = Array.isArray(fields.Cause) ? fields.Cause.join(', ') : fields.Cause;
-
-                // ✅ Correction affichage date (timestamp → millisecondes)
-                let dateValue = fields.Date_heure;
-                if (typeof dateValue === 'number' && dateValue < 1e12) {
-                    dateValue = dateValue * 1000;
-                }
-                const dateStr = new Date(dateValue).toLocaleString('fr-FR');
-
+                
+                // Créer le popup
                 const popupContent = `
                     <div style="min-width: 200px;">
                         <h3 style="margin: 0 0 10px 0; color: #333; font-size: 15px;">
@@ -62,81 +516,485 @@
                                 </span>
                             </p>
                             ${fields.Description ? `<p style="margin: 5px 0;"><strong>Description:</strong><br>${fields.Description}</p>` : ''}
-                            <p style="margin: 5px 0; font-size: 11px; color: #999;">${dateStr}</p>
+                            <p style="margin: 5px 0; font-size: 11px; color: #999;">
+                                    ${new Date(
+  fields.Date_heure < 1e12 ? fields.Date_heure * 1000 : fields.Date_heure
+).toLocaleString('fr-FR')}
+                            </p>
                         </div>
                     </div>
                 `;
-
-                // reste du code inchangé (création marqueurs ou lignes)
-                const isTroncon = fields.Latitude_fin && fields.Longitude_fin &&
-                                  typeof fields.Latitude_fin === 'number' &&
+                
+                // Vérifier si c'est un tronçon (avec coordonnées de fin valides)
+                const isTroncon = fields.Latitude_fin && fields.Longitude_fin && 
+                                  typeof fields.Latitude_fin === 'number' && 
                                   typeof fields.Longitude_fin === 'number';
+                
                 if (isTroncon) {
+                    // C'est un tronçon - Afficher une ligne
                     const line = L.polyline(
                         [[fields.Latitude, fields.Longitude], [fields.Latitude_fin, fields.Longitude_fin]], 
-                        { color: color, weight: 6, opacity: fields.Statut === 'Resolu' ? 0.4 : 0.8 }
-                    ).bindPopup(popupContent).bindTooltip(`${fields.Route} - ${fields.Priorite}`, { direction: 'center' }).addTo(map);
+                        {
+                            color: color,
+                            weight: 6,
+                            opacity: fields.Statut === 'Resolu' ? 0.4 : 0.8
+                        }
+                    )
+                    .bindPopup(popupContent)
+                    .bindTooltip(`${fields.Route} - ${fields.Priorite}`, {
+                        permanent: false,
+                        direction: 'center'
+                    })
+                    .addTo(map);
+                    
                     existingLines.push(line);
+                    
+                    // Ajouter des marqueurs cliquables aux extrémités avec popup
+                    const startIcon = L.circleMarker([fields.Latitude, fields.Longitude], {
+                        radius: 6,
+                        fillColor: color,
+                        color: 'white',
+                        weight: 2,
+                        fillOpacity: fields.Statut === 'Resolu' ? 0.4 : 1
+                    })
+                    .bindPopup(popupContent)
+                    .bindTooltip('🔵 Début', { permanent: false, direction: 'top' })
+                    .addTo(map);
+                    
+                    const endIcon = L.circleMarker([fields.Latitude_fin, fields.Longitude_fin], {
+                        radius: 6,
+                        fillColor: color,
+                        color: 'white',
+                        weight: 2,
+                        fillOpacity: fields.Statut === 'Resolu' ? 0.4 : 1
+                    })
+                    .bindPopup(popupContent)
+                    .bindTooltip('🔴 Fin', { permanent: false, direction: 'top' })
+                    .addTo(map);
+                    
+                    existingMarkers.push(startIcon, endIcon);
+                    
                 } else {
+                    // C'est un point simple - Afficher un marqueur
                     const icon = L.divIcon({
                         className: 'existing-marker',
-                        html: `<div style="background:${color};width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);${fields.Statut === 'Resolu' ? 'opacity:0.5;' : ''}"></div>`,
+                        html: `<div style="
+                            background: ${color};
+                            width: 24px;
+                            height: 24px;
+                            border-radius: 50%;
+                            border: 3px solid white;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                            ${fields.Statut === 'Resolu' ? 'opacity: 0.5;' : ''}
+                        "></div>`,
                         iconSize: [24, 24],
                         iconAnchor: [12, 12]
                     });
-                    const marker = L.marker([fields.Latitude, fields.Longitude], { icon }).bindPopup(popupContent).addTo(map);
+                    
+                    const marker = L.marker([fields.Latitude, fields.Longitude], { icon: icon })
+                        .bindPopup(popupContent)
+                        .addTo(map);
+                    
                     existingMarkers.push(marker);
                 }
             });
         }
-
-        // --- [code inchangé jusqu’à getRouteInfo()] ---
-
-        // ✅ Nouvelle version avec Nominatim + Overpass en secours
-        async function getRouteInfo(lat, lng) {
-            let routeInfo = { route: '', commune: '' };
-            try {
-                // 1️⃣ Nominatim (OpenStreetMap)
-                const response1 = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&extratags=1`,
-                    { headers: { 'User-Agent': 'Widget-Grist-Routes/1.0' } }
-                );
-                const data1 = await response1.json();
-
-                if (data1.address) {
-                    routeInfo.commune = data1.address.city || data1.address.town || data1.address.village || '';
-                    routeInfo.route = data1.address.road || '';
-                }
-                if (data1.extratags && data1.extratags.ref) {
-                    routeInfo.route = data1.extratags.ref;
-                }
-
-                // 2️⃣ Si toujours pas de route trouvée → Overpass (plan B)
-                if (!routeInfo.route) {
-                    const overpassQuery = `
-                        [out:json];
-                        way(around:50,${lat},${lng})["highway"~"^(motorway|trunk|primary|secondary)$"]["ref"];
-                        out tags;
-                    `;
-                    const response2 = await fetch("https://overpass-api.de/api/interpreter", {
-                        method: "POST",
-                        body: overpassQuery
-                    });
-                    const data2 = await response2.json();
-                    if (data2.elements && data2.elements.length > 0) {
-                        const road = data2.elements[0];
-                        if (road.tags && road.tags.ref) {
-                            routeInfo.route = road.tags.ref;
-                        }
+        
+        async function onMapClick(e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+            
+            if (!tronconMode) {
+                // Premier clic - Début du tronçon
+                startPoint = { lat: lat, lng: lng };
+                tronconMode = true;
+                
+                // Marqueur début (bleu)
+                if (startMarker) map.removeLayer(startMarker);
+                startMarker = L.circleMarker([lat, lng], {
+                    radius: 8,
+                    fillColor: '#007bff',
+                    color: 'white',
+                    weight: 3,
+                    fillOpacity: 1
+                }).addTo(map);
+                
+                // Changer l'instruction
+                document.getElementById('banner').textContent = '🔴 Cliquez pour marquer la FIN du tronçon coupé';
+                document.getElementById('banner').classList.add('step2');
+                
+            } else {
+                // Deuxième clic - Fin du tronçon
+                const endPoint = { lat: lat, lng: lng };
+                
+                // Marqueur fin (rouge)
+                if (endMarker) map.removeLayer(endMarker);
+                endMarker = L.circleMarker([lat, lng], {
+                    radius: 8,
+                    fillColor: '#dc3545',
+                    color: 'white',
+                    weight: 3,
+                    fillOpacity: 1
+                }).addTo(map);
+                
+                // Tracer la ligne
+                if (tronconLine) map.removeLayer(tronconLine);
+                tronconLine = L.polyline(
+                    [[startPoint.lat, startPoint.lng], [endPoint.lat, endPoint.lng]], 
+                    {
+                        color: '#dc3545',
+                        weight: 5,
+                        opacity: 0.7
                     }
-                }
-            } catch (error) {
-                console.error('Erreur récupération route:', error);
+                ).addTo(map);
+                
+                // Calculer la distance
+                const distance = calculateDistance(startPoint.lat, startPoint.lng, lat, lng);
+                
+                // Récupérer les infos de la route (au point du milieu pour plus de précision)
+                const midLat = (startPoint.lat + lat) / 2;
+                const midLng = (startPoint.lng + lng) / 2;
+                
+                const adresseInfo = await getRouteInfo(midLat, midLng);
+                
+                // Ouvrir le formulaire
+                showFormPopup(startPoint, endPoint, distance, adresseInfo);
+                
+                // Réinitialiser le mode
+                document.getElementById('banner').textContent = '🔵 Cliquez pour marquer le DÉBUT du tronçon coupé';
+                document.getElementById('banner').classList.remove('step2');
+                tronconMode = false;
             }
-            return routeInfo;
         }
+        
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Rayon de la Terre en km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return (R * c * 1000).toFixed(0); // Distance en mètres
+        }
+        
+async function getRouteInfo(lat, lng) {
+  let routeInfo = { route: '', commune: '' };
 
-        // --- le reste du code (showFormPopup, submitSignalement, etc.) reste inchangé ---
+  try {
+    // 1️⃣ Nominatim : plus précis que data.gouv pour les routes
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&extratags=1`,
+      {
+        headers: {
+          "User-Agent": "Widget-Grist-Routes/1.0"
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.address) {
+      routeInfo.commune =
+        data.address.city ||
+        data.address.town ||
+        data.address.village ||
+        "";
+      routeInfo.route = data.address.road || "";
+    }
+
+    // Si une référence route (ex : N24, D137) est présente
+    if (data.extratags && data.extratags.ref) {
+      routeInfo.route = data.extratags.ref;
+    }
+
+    // 2️⃣ Si toujours rien trouvé, petit secours via Overpass (dans un rayon de 50 m)
+    if (!routeInfo.route) {
+      const overpassQuery = `
+        [out:json];
+        way(around:50,${lat},${lng})["highway"]["ref"];
+        out tags;
+      `;
+      const response2 = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: overpassQuery
+      });
+      const data2 = await response2.json();
+
+      if (data2.elements && data2.elements.length > 0) {
+        const road = data2.elements[0];
+        if (road.tags && road.tags.ref) {
+          routeInfo.route = road.tags.ref;
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Erreur récupération route:", error);
+  }
+
+  return routeInfo;
+}
+
+        
+        function showFormPopup(startPoint, endPoint, distance, adresseInfo) {
+            // Calculer le point du milieu pour afficher le popup
+            const midLat = (startPoint.lat + endPoint.lat) / 2;
+            const midLng = (startPoint.lng + endPoint.lng) / 2;
+            const popupContent = `
+                <div class="popup-form">
+                    <div class="popup-header">
+                        <h3>📍 Nouveau signalement - Tronçon</h3>
+                        <div class="popup-coords">
+                            Longueur: ${distance}m
+                            <br>Début: ${startPoint.lat.toFixed(6)}, ${startPoint.lng.toFixed(6)}
+                            <br>Fin: ${endPoint.lat.toFixed(6)}, ${endPoint.lng.toFixed(6)}
+                        </div>
+                    </div>
+                    
+                    <div id="message"></div>
+                    
+                    <div class="form-group">
+                        <label>Nom de l'agent *</label>
+                        <input type="text" id="agent" placeholder="Ex: Jean Dupont" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Route *</label>
+                        <input type="text" id="route" value="${adresseInfo.route}" placeholder="Ex: D137" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Commune *</label>
+                        <input type="text" id="commune" value="${adresseInfo.commune}" placeholder="Ex: Rennes" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Type de coupure *</label>
+                        <select id="typeCoupure">
+                            <option value="Totale">Totale</option>
+                            <option value="Partielle">Partielle</option>
+                            <option value="Déviation">Déviation</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Cause(s) *</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c1" value="Inondation">
+                                <label for="c1">Inondation</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c2" value="Accident">
+                                <label for="c2">Accident</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c3" value="Travaux">
+                                <label for="c3">Travaux</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c4" value="Arbre">
+                                <label for="c4">Arbre</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c5" value="Glissement">
+                                <label for="c5">Glissement</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="c6" value="Autre">
+                                <label for="c6">Autre</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Priorité *</label>
+                        <select id="priorite">
+                            <option value="Basse">Basse</option>
+                            <option value="Moyenne" selected>Moyenne</option>
+                            <option value="Haute">Haute</option>
+                            <option value="Critique">Critique</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="description" rows="3" placeholder="Détails..."></textarea>
+                    </div>
+                    
+                    <button class="btn-submit" onclick="submitSignalement(${startPoint.lat}, ${startPoint.lng}, ${endPoint.lat}, ${endPoint.lng}, ${distance})">
+                        ✓ Créer le signalement
+                    </button>
+                    
+                    <button class="btn-cancel" onclick="cancelSignalement()">
+                        Annuler
+                    </button>
+                </div>
+            `;
+            
+            // Créer un popup au milieu du tronçon
+            const popup = L.popup({
+                maxWidth: 350,
+                maxHeight: window.innerHeight * 0.8,
+                closeButton: false,
+                autoPan: true,
+                keepInView: true
+            })
+            .setLatLng([midLat, midLng])
+            .setContent(popupContent)
+            .openOn(map);
+        }
+        
+        window.submitSignalement = async function(startLat, startLng, endLat, endLng, distance) {
+            console.log('submitSignalement appelé avec:', { startLat, startLng, endLat, endLng, distance });
+            
+            const agent = document.getElementById('agent').value.trim();
+            const route = document.getElementById('route').value.trim();
+            const commune = document.getElementById('commune').value.trim();
+            const typeCoupure = document.getElementById('typeCoupure').value;
+            const priorite = document.getElementById('priorite').value;
+            let description = document.getElementById('description').value.trim();
+            
+            // Ajouter la longueur du tronçon à la description
+            description = `Tronçon de ${distance}m${description ? ' - ' + description : ''}`;
+            
+            const causes = [];
+            for (let i = 1; i <= 6; i++) {
+                const cb = document.getElementById('c' + i);
+                if (cb && cb.checked) causes.push(cb.value);
+            }
+            
+            // Validation
+            if (!agent || !route || !commune) {
+                showPopupMessage('error', 'Veuillez remplir tous les champs obligatoires');
+                return;
+            }
+            
+            if (causes.length === 0) {
+                showPopupMessage('error', 'Sélectionnez au moins une cause');
+                return;
+            }
+            
+            // Désactiver le bouton
+            const btn = document.querySelector('.btn-submit');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="spinner"></div>Envoi...';
+            
+            try {
+                console.log('Envoi signalement. Mode Grist:', isInGrist, 'API disponible:', !!gristAPI);
+                
+                if (isInGrist && gristAPI) {
+                    // Mode Grist Widget
+                    console.log('Utilisation API Widget Grist');
+                    const record = {
+                        Date_heure: new Date().toISOString(),
+                        Agent: agent,
+                        Latitude: startLat,
+                        Longitude: startLng,
+                        Latitude_fin: endLat,
+                        Longitude_fin: endLng,
+                        Route: route,
+                        Commune: commune,
+                        Type_coupure: typeCoupure,
+                        Cause: ['L', ...causes],
+                        Description: description,
+                        Statut: 'Actif',
+                        Priorite: priorite
+                    };
+                    
+                    console.log('Record à envoyer:', record);
+                    
+                    await gristAPI.docApi.applyUserActions([
+                        ['AddRecord', 'Signalements', null, record]
+                    ]);
+                    
+                    console.log('Signalement créé via Widget API');
+                } else {
+                    // Mode Standalone
+                    console.log('Utilisation API REST (standalone)');
+                    const record = {
+                        Date_heure: new Date().toISOString(),
+                        Agent: agent,
+                        Latitude: startLat,
+                        Longitude: startLng,
+                        Latitude_fin: endLat,
+                        Longitude_fin: endLng,
+                        Route: route,
+                        Commune: commune,
+                        Type_coupure: typeCoupure,
+                        Cause: causes,
+                        Description: description,
+                        Statut: 'Actif',
+                        Priorite: priorite
+                    };
+                    
+                    const response = await fetch(GRIST_CONFIG.apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${GRIST_CONFIG.apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ records: [{ fields: record }] })
+                    });
+                    
+                    if (!response.ok) throw new Error('Erreur API');
+                }
+                
+                showPopupMessage('success', '✓ Signalement créé !');
+                
+                // Recharger les signalements pour afficher le nouveau
+                setTimeout(() => {
+                    loadExistingSignalements();
+                }, 500);
+                
+                setTimeout(() => {
+                    map.closePopup();
+                    if (tempMarker) {
+                        map.removeLayer(tempMarker);
+                        tempMarker = null;
+                    }
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Erreur:', error);
+                showPopupMessage('error', 'Erreur lors de la création: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = '✓ Créer le signalement';
+            }
+        };
+        
+        window.cancelSignalement = function() {
+            map.closePopup();
+            
+            // Supprimer les marqueurs et la ligne temporaires
+            if (startMarker) {
+                map.removeLayer(startMarker);
+                startMarker = null;
+            }
+            if (endMarker) {
+                map.removeLayer(endMarker);
+                endMarker = null;
+            }
+            if (tronconLine) {
+                map.removeLayer(tronconLine);
+                tronconLine = null;
+            }
+            
+            // Réinitialiser le mode
+            tronconMode = false;
+            startPoint = null;
+            document.getElementById('banner').textContent = '🔵 Cliquez pour marquer le DÉBUT du tronçon coupé';
+            document.getElementById('banner').classList.remove('step2');
+        };
+        
+        function showPopupMessage(type, text) {
+            const msgDiv = document.getElementById('message');
+            msgDiv.className = type === 'success' ? 'success-message' : 'error-message';
+            msgDiv.textContent = text;
+            msgDiv.style.display = 'block';
+        }
+        
+        // Initialiser
         setTimeout(initMap, 1000);
     </script>
 </body>
