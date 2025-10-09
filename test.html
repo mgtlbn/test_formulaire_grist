@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Signalement Géographique</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body { 
+            margin: 0; 
+            padding: 10px; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f8f9fa;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .alert {
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+        }
+        
+        .alert a {
+            color: #856404;
+            text-decoration: underline;
+        }
+        
+        #map { 
+            height: 450px; 
+            width: 100%; 
+            margin-bottom: 20px;
+            border-radius: 4px;
+            border: 2px solid #dee2e6;
+        }
+        
+        #form {
+            padding: 0;
+        }
+        
+        .field {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #495057;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #80bdff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .mode-selector {
+            margin-bottom: 15px;
+        }
+        
+        .mode-btn {
+            padding: 8px 15px;
+            font-size: 13px;
+        }
+        
+        .mode-btn.active {
+            background: #0056b3;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        #status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 4px;
+            display: none;
+            font-weight: 500;
+        }
+        
+        #status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        #status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        #status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .readonly-field {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+        
+        .iframe-notice {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .iframe-notice strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            #map {
+                height: 300px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📍 Nouveau signalement</h2>
+    
+    <!-- Alerte iframe/géoloc -->
+    <div class="iframe-notice" id="iframe-notice" style="display: none;">
+        <strong>💡 Dans une iframe Grist ?</strong>
+        La géolocalisation peut être bloquée. 
+        <a href="#" onclick="openFullscreen(); return false;">Cliquez ici pour ouvrir en plein écran</a> 
+        et activer la géolocalisation automatique.
+    </div>
+    
+    <!-- Boutons d'action -->
+    <div class="button-group">
+        <button class="btn-warning" id="geoloc-btn" onclick="testGeolocation()">
+            📍 Me géolocaliser
+        </button>
+        <button class="btn-secondary" onclick="openFullscreen()">
+            🚀 Ouvrir en plein écran
+        </button>
+    </div>
+    
+    <!-- Sélecteur de mode -->
+    <div class="mode-selector">
+        <strong>Type de géométrie :</strong>
+        <div class="button-group">
+            <button class="mode-btn btn-primary active" data-mode="point" onclick="selectMode('point')">
+                📍 Point
+            </button>
+            <button class="mode-btn btn-primary" data-mode="line" onclick="selectMode('line')">
+                📏 Ligne
+            </button>
+            <button class="mode-btn btn-primary" data-mode="polygon" onclick="selectMode('polygon')">
+                ⬟ Polygone
+            </button>
+        </div>
+    </div>
+    
+    <!-- Carte -->
+    <div id="map"></div>
+    
+    <!-- Formulaire -->
+    <div id="form">
+        <div class="field">
+            <label for="type">Type de signalement *</label>
+            <select id="type" required>
+                <option value="">-- Sélectionner --</option>
+                <option>Nid de poule</option>
+                <option>Fuite d'eau</option>
+                <option>Éclairage défectueux</option>
+                <option>Dégradation</option>
+                <option>Autre</option>
+            </select>
+        </div>
+        
+        <div class="field">
+            <label for="description">Description</label>
+            <textarea id="description" placeholder="Décrivez le problème..."></textarea>
+        </div>
+        
+        <div class="field">
+            <label for="geojson">GeoJSON (généré automatiquement)</label>
+            <textarea id="geojson" class="readonly-field" rows="3" readonly></textarea>
+        </div>
+        
+        <button class="btn-success" onclick="submitForm()" style="width: 100%; font-size: 16px;">
+            📤 Envoyer le signalement
+        </button>
+        
+        <div id="status"></div>
+    </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<script>
+// ====== CONFIGURATION ======
+const DEFAULT_CENTER = [48.8566, 2.3522]; // Paris - Change selon ta ville
+const DEFAULT_ZOOM = 13;
+
+// ====== VARIABLES GLOBALES ======
+let map;
+let drawnItems;
+let currentMode = 'point';
+let currentGeometry = null;
+let currentDrawControl = null;
+let isInIframe = false;
+let gristReady = false;
+
+// ====== DÉTECTION IFRAME ======
+try {
+    isInIframe = window.self !== window.top;
+    if (isInIframe) {
+        document.getElementById('iframe-notice').style.display = 'block';
+    }
+} catch (e) {
+    isInIframe = true;
+    document.getElementById('iframe-notice').style.display = 'block';
+}
+
+// ====== INITIALISATION GRIST ======
+grist.ready({
+    requiredAccess: 'full',
+    columns: [
+        { name: 'type', title: 'Type', type: 'Choice' },
+        { name: 'description', title: 'Description', type: 'Text' },
+        { name: 'geojson', title: 'GeoJSON', type: 'Text' },
+        { name: 'date', title: 'Date', type: 'DateTime' },
+        { name: 'geometrie_type', title: 'Type de géométrie', type: 'Text' }
+    ]
+}).then(() => {
+    gristReady = true;
+    console.log('✅ Grist API prête');
+}).catch(err => {
+    console.warn('⚠️ Grist API non disponible (mode standalone)', err);
+});
+
+// ====== INITIALISATION CARTE ======
+function initMap() {
+    map = L.map('map').setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(map);
+    
+    drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    
+    // Click pour mode Point
+    map.on('click', function(e) {
+        if (currentMode === 'point') {
+            drawnItems.clearLayers();
+            L.marker(e.latlng).addTo(drawnItems);
+            updateGeoJSON({
+                type: 'Point',
+                coordinates: [e.latlng.lng, e.latlng.lat]
+            });
+            showStatus('✅ Point placé. Remplissez le formulaire et envoyez.', 'info');
+        }
+    });
+    
+    showStatus('👆 Cliquez sur la carte pour placer un point', 'info');
+}
+
+// ====== SÉLECTION DU MODE ======
+function selectMode(mode) {
+    // Mise à jour visuelle des boutons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Changement de mode
+    currentMode = mode;
+    drawnItems.clearLayers();
+    updateGeoJSON(null);
+    
+    // Désactiver le contrôle de dessin précédent
+    if (currentDrawControl) {
+        currentDrawControl.disable();
+        currentDrawControl = null;
+    }
+    
+    // Configurer le nouveau mode
+    if (mode === 'point') {
+        showStatus('👆 Cliquez sur la carte pour placer un point', 'info');
+    } else if (mode === 'line') {
+        enableDrawing('polyline');
+        showStatus('📏 Cliquez sur la carte pour tracer une ligne. Double-clic pour terminer.', 'info');
+    } else if (mode === 'polygon') {
+        enableDrawing('polygon');
+        showStatus('⬟ Cliquez sur la carte pour tracer un polygone. Double-clic pour terminer.', 'info');
+    }
+}
+
+// ====== ACTIVER LE DESSIN ======
+function enableDrawing(type) {
+    let options = {
+        shapeOptions: { 
+            color: '#3388ff',
+            weight: 3
+        }
+    };
+    
+    if (type === 'polyline') {
+        currentDrawControl = new L.Draw.Polyline(map, options);
+    } else if (type === 'polygon') {
+        currentDrawControl = new L.Draw.Polygon(map, options);
+    }
+    
+    currentDrawControl.enable();
+    
+    // Gérer la fin du dessin
+    map.once('draw:created', function(e) {
+        drawnItems.clearLayers();
+        drawnItems.addLayer(e.layer);
+        
+        let coords = [];
+        let geojsonType = '';
+        
+        if (type === 'polyline') {
+            coords = e.layer.getLatLngs().map(ll => [ll.lng, ll.lat]);
+            geojsonType = 'LineString';
+        } else if (type === 'polygon') {
+            coords = e.layer.getLatLngs()[0].map(ll => [ll.lng, ll.lat]);
+            coords.push(coords[0]); // Fermer le polygone
+            geojsonType = 'Polygon';
+        }
+        
+        updateGeoJSON({
+            type: geojsonType,
+            coordinates: type === 'polygon' ? [coords] : coords
+        });
+        
+        showStatus('✅ Géométrie tracée. Remplissez le formulaire et envoyez.', 'info');
+    });
+}
+
+// ====== METTRE À JOUR GEOJSON ======
+function updateGeoJSON(geometry) {
+    currentGeometry = geometry;
+    document.getElementById('geojson').value = geometry ? 
+        JSON.stringify(geometry, null, 2) : '';
+}
+
+// ====== TEST GÉOLOCALISATION ======
+function testGeolocation() {
+    if (!navigator.geolocation) {
+        showStatus('❌ Géolocalisation non supportée par ce navigateur', 'error');
+        return;
+    }
+    
+    showStatus('⏳ Demande de géolocalisation en cours...', 'info');
+    
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+    };
+    
+    navigator.geolocation.getCurrentPosition(
+        function(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+            
+            showStatus(`✅ Position obtenue ! Précision: ${Math.round(accuracy)}m`, 'success');
+            
+            // Centrer la carte
+            map.setView([lat, lon], 17);
+            
+            // Placer un marqueur
+            drawnItems.clearLayers();
+            const marker = L.marker([lat, lon]).addTo(drawnItems);
+            marker.bindPopup(`📍 Votre position<br>Précision: ${Math.round(accuracy)}m`).openPopup();
+            
+            updateGeoJSON({
+                type: 'Point',
+                coordinates: [lon, lat]
+            });
+        },
+        function(error) {
+            let msg = '';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    msg = '❌ Permission refusée. ';
+                    if (isInIframe) {
+                        msg += 'La géolocalisation est bloquée dans l\'iframe. Cliquez sur "Ouvrir en plein écran" ci-dessus.';
+                    } else {
+                        msg += 'Autorisez la géolocalisation dans votre navigateur.';
+                    }
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    msg = '❌ Position non disponible. Vérifiez vos paramètres GPS.';
+                    break;
+                case error.TIMEOUT:
+                    msg = '❌ Délai dépassé. Réessayez.';
+                    break;
+            }
+            showStatus(msg, 'error');
+        },
+        options
+    );
+}
+
+// ====== OUVRIR EN PLEIN ÉCRAN ======
+function openFullscreen() {
+    const currentUrl = window.location.href;
+    window.open(currentUrl, '_blank');
+    showStatus('✅ Page ouverte dans un nouvel onglet. La géolocalisation devrait y fonctionner !', 'success');
+}
+
+// ====== SOUMETTRE LE FORMULAIRE ======
+async function submitForm() {
+    // Validation
+    const type = document.getElementById('type').value;
+    const description = document.getElementById('description').value;
+    
+    if (!type) {
+        showStatus('❌ Veuillez sélectionner un type de signalement', 'error');
+        return;
+    }
+    
+    if (!currentGeometry) {
+        showStatus('❌ Veuillez placer une géométrie sur la carte', 'error');
+        return;
+    }
+    
+    // Préparer les données
+    const data = {
+        type: type,
+        description: description || '',
+        geojson: JSON.stringify(currentGeometry),
+        geometrie_type: currentGeometry.type,
+        date: new Date().toISOString()
+    };
+    
+    showStatus('⏳ Envoi en cours...', 'info');
+    
+    try {
+        if (gristReady) {
+            // Envoi via Grist API
+            await grist.docApi.applyUserActions([
+                ['AddRecord', 'Signalement', null, data]
+            ]);
+            
+            showStatus('✅ Signalement envoyé avec succès à Grist !', 'success');
+        } else {
+            // Mode standalone : afficher les données
+            console.log('Données à envoyer:', data);
+            showStatus('✅ Données préparées (mode test - Grist non connecté)', 'success');
+        }
+        
+        // Réinitialiser le formulaire
+        setTimeout(() => {
+            document.getElementById('type').value = '';
+            document.getElementById('description').value = '';
+            drawnItems.clearLayers();
+            updateGeoJSON(null);
+            showStatus('', '');
+        }, 2000);
+        
+    } catch (err) {
+        console.error('Erreur:', err);
+        showStatus('❌ Erreur lors de l\'envoi : ' + err.message, 'error');
+    }
+}
+
+// ====== AFFICHER UN MESSAGE ======
+function showStatus(message, type) {
+    const status = document.getElementById('status');
+    
+    if (!message) {
+        status.style.display = 'none';
+        return;
+    }
+    
+    status.textContent = message;
+    status.className = type; // 'error', 'success', 'info'
+    status.style.display = 'block';
+    
+    // Auto-hide info messages après 5s
+    if (type === 'info') {
+        setTimeout(() => {
+            if (status.className === 'info') {
+                status.style.display = 'none';
+            }
+        }, 5000);
+    }
+}
+
+// ====== INITIALISATION AU CHARGEMENT ======
+window.addEventListener('load', function() {
+    initMap();
+});
+
+// ====== GESTION DES ERREURS ======
+window.addEventListener('error', function(e) {
+    console.error('Erreur globale:', e.error);
+    showStatus('❌ Une erreur est survenue. Consultez la console.', 'error');
+});
+</script>
+
+</body>
+</html>
