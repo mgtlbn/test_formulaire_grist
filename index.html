@@ -1,6 +1,6 @@
 <script>
 // ====== CONFIGURATION ======
-const DEFAULT_CENTER = [48.8566, 2.3522]; // Paris
+const DEFAULT_CENTER = [48.2020, -2.9326]; // Rennes, Bretagne
 const DEFAULT_ZOOM = 13;
 
 // ====== VARIABLES GLOBALES ======
@@ -290,4 +290,19 @@ function showStatus(message, type) {
             if (status.className === 'info') {
                 status.style.display = 'none';
             }
-        }, 5000
+        }, 5000);
+    }
+}
+
+// ====== INITIALISATION TOTALE ======
+// Initialiser la carte dès que possible
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        initMap();
+        initGrist();
+    });
+} else {
+    initMap();
+    initGrist();
+}
+</script>
