@@ -243,8 +243,8 @@
     <div class="iframe-notice" id="iframe-notice" style="display: none;">
         <strong>💡 Dans une iframe Grist ?</strong>
         La géolocalisation peut être bloquée. 
-        <a href="#" onclick="openFullscreen(); return false;">Cliquez ici pour ouvrir en plein écran</a> 
-        et activer la géolocalisation automatique.
+        <a href="#" onclick="openFullscreen(); return false;">Cliquez ici pour ouvrir en plein écran</a>, 
+        géolocalisez-vous, puis revenez ici : votre position sera automatiquement récupérée !
     </div>
     
     <!-- Boutons d'action -->
@@ -365,7 +365,44 @@ function initMap() {
         });
         
         console.log('✅ Carte initialisée');
-        showStatus('👆 Cliquez sur la carte pour placer un point', 'info');
+        
+        // ===== RÉCUPÉRER LA GÉOLOC DEPUIS LOCALSTORAGE =====
+        try {
+            const savedGeoloc = localStorage.getItem('grist_geoloc');
+            if (savedGeoloc) {
+                const geoloc = JSON.parse(savedGeoloc);
+                const [lon, lat] = geoloc.coordinates;
+                const age = Date.now() - new Date(geoloc.timestamp).getTime();
+                
+                // Utiliser seulement si moins de 5 minutes
+                if (age < 5 * 60 * 1000) {
+                    map.setView([lat, lon], 17);
+                    drawnItems.clearLayers();
+                    const marker = L.marker([lat, lon]).addTo(drawnItems);
+                    marker.bindPopup(`📍 Position récupérée !<br>Précision: ${Math.round(geoloc.accuracy || 0)}m`).openPopup();
+                    
+                    updateGeoJSON({
+                        type: 'Point',
+                        coordinates: [lon, lat]
+                    });
+                    
+                    showStatus('✅ Votre position a été automatiquement récupérée !', 'success');
+                    
+                    // Nettoyer après utilisation
+                    localStorage.removeItem('grist_geoloc');
+                } else {
+                    // Trop vieux, on supprime
+                    localStorage.removeItem('grist_geoloc');
+                    showStatus('👆 Cliquez sur la carte pour placer un point', 'info');
+                }
+            } else {
+                showStatus('👆 Cliquez sur la carte pour placer un point', 'info');
+            }
+        } catch (e) {
+            console.error('Erreur récupération localStorage:', e);
+            showStatus('👆 Cliquez sur la carte pour placer un point', 'info');
+        }
+        
     } catch (error) {
         console.error('❌ Erreur initialisation carte:', error);
         showStatus('❌ Erreur lors du chargement de la carte', 'error');
@@ -493,7 +530,28 @@ function testGeolocation() {
             const lon = position.coords.longitude;
             const accuracy = position.coords.accuracy;
             
+            const geoloc = {
+                type: 'Point',
+                coordinates: [lon, lat],
+                timestamp: new Date().toISOString(),
+                accuracy: accuracy
+            };
+            
+            // ===== SAUVEGARDER DANS LOCALSTORAGE =====
+            try {
+                localStorage.setItem('grist_geoloc', JSON.stringify(geoloc));
+                console.log('✅ Géoloc sauvegardée dans localStorage');
+            } catch (e) {
+                console.error('Erreur localStorage:', e);
+            }
+            
             showStatus(`✅ Position obtenue ! Précision: ${Math.round(accuracy)}m`, 'success');
+            
+            if (!isInIframe) {
+                setTimeout(() => {
+                    showStatus('💡 Position sauvegardée ! Revenez dans Grist, elle sera automatiquement chargée.', 'info');
+                }, 2000);
+            }
             
             map.setView([lat, lon], 17);
             
@@ -501,10 +559,7 @@ function testGeolocation() {
             const marker = L.marker([lat, lon]).addTo(drawnItems);
             marker.bindPopup(`📍 Votre position<br>Précision: ${Math.round(accuracy)}m`).openPopup();
             
-            updateGeoJSON({
-                type: 'Point',
-                coordinates: [lon, lat]
-            });
+            updateGeoJSON(geoloc);
         },
         function(error) {
             let msg = '';
@@ -534,7 +589,7 @@ function testGeolocation() {
 function openFullscreen() {
     const currentUrl = window.location.href;
     window.open(currentUrl, '_blank');
-    showStatus('✅ Page ouverte dans un nouvel onglet. La géolocalisation devrait y fonctionner !', 'success');
+    showStatus('✅ Page ouverte dans un nouvel onglet. Géolocalisez-vous puis revenez ici !', 'success');
 }
 
 // ====== SOUMETTRE LE FORMULAIRE ======
@@ -571,7 +626,7 @@ async function submitForm() {
             showStatus('✅ Signalement envoyé avec succès à Grist !', 'success');
         } else {
             console.log('Données à envoyer:', data);
-            showStatus('✅ Données préparées (mode test - Grist non connecté)', 'success');
+            showStatus('⚠️ Mode test - Grist non connecté. Utilisez depuis l\'iframe Grist pour enregistrer.', 'error');
         }
         
         setTimeout(() => {
